@@ -48,6 +48,31 @@ function App() {
     setCargandoLogin(false)
   }
 
+  // Estilo base unificado para los botones del menú
+  const getEstiloBotonMenu = (vista) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 18px',
+    borderRadius: '10px',
+    marginBottom: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    // Si está activa: Degradado moderno y sombra. Si no: Transparente.
+    background: vistaActual === vista ? 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)' : 'transparent',
+    color: vistaActual === vista ? 'white' : '#94a3b8',
+    fontWeight: vistaActual === vista ? '700' : '500',
+    boxShadow: vistaActual === vista ? '0 4px 12px rgba(56, 189, 248, 0.25)' : 'none',
+  })
+
+  // Estilo para el hover (efecto visual al pasar el mouse)
+  const manejarHover = (e, vista, outline) => {
+    if (vistaActual !== vista) {
+      e.currentTarget.style.backgroundColor = outline ? 'rgba(255,255,255,0.1)' : 'transparent';
+      e.currentTarget.style.color = outline ? 'white' : '#94a3b8';
+    }
+  }
+
   // ========================================================
   // FORMULARIO DE ACCESO DIRECTO (SIN PROTOCOLOS NI PROMPTS)
   // ========================================================
@@ -127,7 +152,7 @@ function App() {
 
       {/* MENÚ LATERAL ORIGINAL (SE OCULTA AUTOMÁTICAMENTE EN MÓVIL SI NO ESTÁ DESPLEGADO) */}
       <div style={{ 
-        width: isMobile ? '100%' : '280px', 
+        width: isMobile ? '100%' : '290px', // Un poco más ancho para los nuevos botones
         backgroundColor: '#0f172a', 
         color: 'white', 
         display: isMobile ? (menuAbiertoMobile ? 'flex' : 'none') : 'flex', 
@@ -136,40 +161,70 @@ function App() {
         top: '57px',
         left: 0,
         height: isMobile ? 'calc(100vh - 57px)' : 'auto',
-        zIndex: 999
+        zIndex: 999,
+        transition: 'all 0.3s ease'
       }}>
         {!isMobile && (
-          <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
-            <ShieldCheck size={40} color="#38bdf8" />
+          <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(to bottom, #111827, #0f172a)' }}>
+            <ShieldCheck size={44} color="#38bdf8" />
             <div>
-              <h2 style={{ fontSize: '15px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>Alcaldía de Charallave</h2>
-              <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8' }}>Municipio Cristóbal Rojas</p>
+              <h2 style={{ fontSize: '15px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '800', color: 'white' }}>Alcaldía de Charallave</h2>
+              <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8', fontWeight: '500' }}>Municipio Cristóbal Rojas</p>
             </div>
           </div>
         )}
         
-        <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
-          <div onClick={() => { setVistaActual('dashboard'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'dashboard' ? '#0284c7' : 'transparent', color: vistaActual === 'dashboard' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
-            <LayoutDashboard size={20} /> <span style={{ fontWeight: '500' }}>Panel Principal</span>
+        <div style={{ padding: '25px 20px', flex: 1, overflowY: 'auto' }}>
+          {/* BOTONES ACTUALIZADOS CON DISEÑO MODERNO Y UNIFICADO */}
+          <div 
+            onClick={() => { setVistaActual('dashboard'); setMenuAbiertoMobile(false); }} 
+            style={getEstiloBotonMenu('dashboard')}
+            onMouseEnter={(e) => manejarHover(e, 'dashboard', true)}
+            onMouseLeave={(e) => manejarHover(e, 'dashboard', false)}
+          >
+            <LayoutDashboard size={22} /> <span style={{ flex: 1 }}>Panel Principal</span>
           </div>
-          <div onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
-            <Users size={20} /> <span style={{ fontWeight: '500' }}>Gestión de Personal</span>
+          
+          <div 
+            onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} 
+            style={getEstiloBotonMenu('empleados')}
+            onMouseEnter={(e) => manejarHover(e, 'empleados', true)}
+            onMouseLeave={(e) => manejarHover(e, 'empleados', false)}
+          >
+            <Users size={22} /> <span style={{ flex: 1 }}>Gestión de Personal</span>
           </div>
-          {/* NUEVOS BOTONES AÑADIDOS */}
-          <div onClick={() => { setVistaActual('justificaciones'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'justificaciones' ? '#0284c7' : 'transparent', color: vistaActual === 'justificaciones' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
-            <ClipboardList size={20} /> <span style={{ fontWeight: '500' }}>Justificaciones</span>
+          
+          <div 
+            onClick={() => { setVistaActual('justificaciones'); setMenuAbiertoMobile(false); }} 
+            style={getEstiloBotonMenu('justificaciones')}
+            onMouseEnter={(e) => manejarHover(e, 'justificaciones', true)}
+            onMouseLeave={(e) => manejarHover(e, 'justificaciones', false)}
+          >
+            <ClipboardList size={22} /> <span style={{ flex: 1 }}>Justificaciones</span>
           </div>
-          <div onClick={() => { setVistaActual('memos'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'memos' ? '#0284c7' : 'transparent', color: vistaActual === 'memos' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
-            <FileText size={20} /> <span style={{ fontWeight: '500' }}>Memorándums</span>
+          
+          <div 
+            onClick={() => { setVistaActual('memos'); setMenuAbiertoMobile(false); }} 
+            style={getEstiloBotonMenu('memos')}
+            onMouseEnter={(e) => manejarHover(e, 'memos', true)}
+            onMouseLeave={(e) => manejarHover(e, 'memos', false)}
+          >
+            <FileText size={22} /> <span style={{ flex: 1 }}>Memorándums</span>
           </div>
-          <div onClick={() => { setVistaActual('reportes'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'reportes' ? '#0284c7' : 'transparent', color: vistaActual === 'reportes' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
-            <BookOpen size={20} /> <span style={{ fontWeight: '500' }}>Reportes y Expedientes</span>
+          
+          <div 
+            onClick={() => { setVistaActual('reportes'); setMenuAbiertoMobile(false); }} 
+            style={getEstiloBotonMenu('reportes')}
+            onMouseEnter={(e) => manejarHover(e, 'reportes', true)}
+            onMouseLeave={(e) => manejarHover(e, 'reportes', false)}
+          >
+            <BookOpen size={22} /> <span style={{ flex: 1 }}>Reportes y Expedientes</span>
           </div>
         </div>
 
-        <div style={{ padding: '20px', borderTop: '1px solid #1e293b' }}>
-          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0', textAlign: 'center', wordBreak: 'break-all' }}>Sesión: {sesionActiva.user.email}</p>
-          <button onClick={() => { supabase.auth.signOut(); setSesionActiva(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <div style={{ padding: '20px', borderTop: '1px solid #1e293b', background: '#0b1120' }}>
+          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 12px 0', textAlign: 'center', wordBreak: 'break-all', fontWeight: '500' }}>Sesión: {sesionActiva.user.email}</p>
+          <button onClick={() => { supabase.auth.signOut(); setSesionActiva(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#ef4444', border: '2px solid #ef4444', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }} onMouseEnter={(e) => {e.currentTarget.style.backgroundColor='#ef4444'; e.currentTarget.style.color='white'}} onMouseLeave={(e) => {e.currentTarget.style.backgroundColor='transparent'; e.currentTarget.style.color='#ef4444'}}>
             <LogOut size={18} /> Cerrar Sesión
           </button>
         </div>
