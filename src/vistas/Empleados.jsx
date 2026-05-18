@@ -35,7 +35,6 @@ export default function Empleados() {
         texto: `✅ Servidor Público Registrado. Usuario App: ${formulario.cedula} | Clave Inicial: 123456`, 
         tipo: 'exito' 
       })
-      // Reiniciar formulario al estado inicial seguro
       setFormulario({ 
         cedula: '', 
         nombres: '', 
@@ -49,6 +48,31 @@ export default function Empleados() {
     }
   }
 
+  // Estilo base de alta visibilidad para los campos de texto
+  const estiloInputBase = {
+    width: '100%',
+    padding: '12px',
+    boxSizing: 'border-box',
+    borderRadius: '8px',
+    border: '1px solid #94a3b8',
+    fontSize: '16px',
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
+    fontWeight: '500',
+    outline: 'none'
+  }
+
+  // Estilo especial de súper alto contraste para los selectores de Hora (AM/PM)
+  const estiloInputHora = {
+    ...estiloInputBase,
+    border: '2px solid #0284c7',
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
+    fontSize: '16px',
+    fontWeight: '700',
+    cursor: 'pointer'
+  }
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ marginBottom: '30px' }}>
@@ -60,7 +84,7 @@ export default function Empleados() {
         </p>
       </div>
 
-      <div style={{ backgroundColor: 'white', padding: '35px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}>
+      <div style={{ backgroundColor: 'white', padding: '35px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}>
         <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, color: '#0284c7', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           <UserPlus size={22} /> Formulario de Registro Oficial
         </h3>
@@ -78,7 +102,7 @@ export default function Empleados() {
               onChange={manejarCambio} 
               required 
               placeholder="Ej: Juan José"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputBase} 
             />
           </div>
 
@@ -93,13 +117,13 @@ export default function Empleados() {
               onChange={manejarCambio} 
               required 
               placeholder="Ej: Pérez Rodríguez"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputBase} 
             />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0284c7', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Cédula (Identificador/Usuario App Android)
+              Cédula (Usuario App Android)
             </label>
             <input 
               type="text"
@@ -107,8 +131,8 @@ export default function Empleados() {
               value={formulario.cedula} 
               onChange={manejarCambio} 
               required 
-              placeholder="Ej: V12345678 (Sin puntos ni espacios)"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '2px solid #bae6fd', fontSize: '15px', backgroundColor: '#f0f9ff', fontWeight: '600' }} 
+              placeholder="Ej: V12345678"
+              style={{ ...estiloInputBase, border: '2px solid #bae6fd', backgroundColor: '#f0f9ff', fontWeight: '700' }} 
             />
           </div>
           
@@ -123,7 +147,7 @@ export default function Empleados() {
               onChange={manejarCambio} 
               required 
               placeholder="Ej: Servicios Públicos"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputBase} 
             />
           </div>
 
@@ -138,13 +162,13 @@ export default function Empleados() {
               onChange={manejarCambio} 
               required 
               placeholder="Ej: Inspector de Campo"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputBase} 
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Hora Obligatoria de Entrada
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Hora de Entrada (AM / PM)
             </label>
             <input 
               type="time" 
@@ -152,13 +176,13 @@ export default function Empleados() {
               value={formulario.hora_entrada} 
               onChange={manejarCambio} 
               required 
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputHora} 
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Hora Obligatoria de Salida
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Hora de Salida (AM / PM)
             </label>
             <input 
               type="time" 
@@ -166,13 +190,13 @@ export default function Empleados() {
               value={formulario.hora_salida} 
               onChange={manejarCambio} 
               required 
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputHora} 
             />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Tolerancia por Retraso (Minutos de Gracia)
+              Tolerancia (Minutos de Gracia)
             </label>
             <input 
               type="number" 
@@ -182,14 +206,14 @@ export default function Empleados() {
               required 
               min="0"
               max="60"
-              style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', backgroundColor: '#f8fafc' }} 
+              style={estiloInputBase} 
             />
           </div>
 
           <div style={{ gridColumn: 'span 2', marginTop: '15px' }}>
             <button 
               type="submit" 
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '15px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)', transition: 'background 0.2s' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '15px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)' }}
             >
               <Save size={20}/> Registrar en el Sistema del Municipio
             </button>
