@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users } from 'lucide-react'
 
 export default function Empleados() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
@@ -155,29 +155,29 @@ export default function Empleados() {
     }
   }
 
-  // Estilos de alto contraste
+  // Estilos visuales actualizados
   const estiloInputBase = {
     width: '100%',
-    padding: '12px',
+    padding: '14px',
     boxSizing: 'border-box',
-    borderRadius: '8px',
-    border: '1px solid #475569',
-    fontSize: '16px',
-    backgroundColor: '#ffffff',
+    borderRadius: '10px',
+    border: '1px solid #cbd5e1',
+    fontSize: '15px',
+    backgroundColor: '#f8fafc',
     color: '#0f172a',
-    fontWeight: '500',
+    fontWeight: '600',
     outline: 'none'
   }
 
   const estiloSelectTiempo = {
     flex: 1,
     padding: '12px',
-    borderRadius: '8px',
-    border: '2px solid #0284c7',
+    borderRadius: '10px',
+    border: '2px solid #10b981',
     backgroundColor: '#ffffff',
     color: '#0f172a',
-    fontSize: '16px',
-    fontWeight: '700',
+    fontSize: '15px',
+    fontWeight: '800',
     textAlign: 'center',
     cursor: 'pointer',
     outline: 'none'
@@ -194,74 +194,72 @@ export default function Empleados() {
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
-      <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: isMobile ? '24px' : '28px', fontWeight: '800' }}>
-          Gestión de Talento Humano
-        </h1>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '15px' }}>
-          Alta, modificación de jornadas laborales y auditoría interna de credenciales de la Alcaldía.
-        </p>
+      
+      {/* HEADER MODERNO */}
+      <div style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '25px', borderRadius: '16px', color: 'white', boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.4)' }}>
+        <h1 style={{ margin: '0 0 5px 0', fontSize: isMobile ? '24px' : '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}><Users size={32}/> Gestión de Talento Humano</h1>
+        <p style={{ margin: 0, fontSize: '15px', opacity: 0.9 }}>Alta, modificación y auditoría interna de credenciales de la Alcaldía.</p>
       </div>
 
       {/* FORMULARIO DE ACCIONES */}
-      <div style={{ backgroundColor: 'white', padding: isMobile ? '20px' : '35px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0', marginBottom: '40px' }}>
-        <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 0, color: editandoId ? '#0284c7' : '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <div style={{ backgroundColor: 'white', padding: isMobile ? '25px' : '35px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', marginBottom: '40px' }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 25px 0', color: editandoId ? '#059669' : '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', fontSize: '18px', textTransform: 'uppercase', fontWeight: '800' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <UserPlus size={22} /> {editandoId ? 'Modificar Servidor Público' : 'Formulario de Registro Oficial'}
           </span>
           {editandoId && (
-            <button onClick={cancelarEdicion} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <button onClick={cancelarEdicion} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: '800' }}>
               <X size={14} /> Cancelar Edición
             </button>
           )}
         </h3>
         
-        <form onSubmit={guardarEmpleado} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '25px', marginTop: '25px' }}>
+        <form onSubmit={guardarEmpleado} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
           
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Nombres Completos
             </label>
             <input type="text" name="nombres" value={formulario.nombres} onChange={manejarCambio} required placeholder="Ej: Juan José" style={estiloInputBase} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Apellidos Completos
             </label>
             <input type="text" name="apellidos" value={formulario.apellidos} onChange={manejarCambio} required placeholder="Ej: Pérez Rodríguez" style={estiloInputBase} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0284c7', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#059669', marginBottom: '8px', textTransform: 'uppercase' }}>
               Cédula (Usuario App Android)
             </label>
-            <input type="text" name="cedula" value={formulario.cedula} onChange={manejarCambio} required disabled={!!editandoId} placeholder="Ej: V12345678" style={{ ...estiloInputBase, border: '2px solid #bae6fd', backgroundColor: editandoId ? '#f1f5f9' : '#f0f9ff', fontWeight: '700', cursor: editandoId ? 'not-allowed' : 'text' }} />
+            <input type="text" name="cedula" value={formulario.cedula} onChange={manejarCambio} required disabled={!!editandoId} placeholder="Ej: V12345678" style={{ ...estiloInputBase, border: '2px solid #6ee7b7', backgroundColor: editandoId ? '#f1f5f9' : '#ecfdf5', color: '#064e3b' }} />
           </div>
           
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Dirección General / Departamento
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Dirección / Departamento
             </label>
             <input type="text" name="departamento" value={formulario.departamento} onChange={manejarCambio} required placeholder="Ej: Servicios Públicos" style={estiloInputBase} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Cargo Asignado
             </label>
             <input type="text" name="cargo" value={formulario.cargo} onChange={manejarCambio} required placeholder="Ej: Inspector de Campo" style={estiloInputBase} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Tolerancia (Minutos de Gracia)
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Tolerancia (Minutos)
             </label>
             <input type="number" name="tolerancia_minutos" value={formulario.tolerancia_minutos} onChange={manejarCambio} required min="0" max="60" style={estiloInputBase} />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#1e293b', marginBottom: '8px', textTransform: 'uppercase' }}>
               Hora de Entrada
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -271,7 +269,7 @@ export default function Empleados() {
               <select value={entMinuto} onChange={(e) => setEntMinuto(e.target.value)} style={estiloSelectTiempo}>
                 {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
-              <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
+              <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#ecfdf5' }}>
                 <option value="AM" style={estiloOption}>AM</option>
                 <option value="PM" style={estiloOption}>PM</option>
               </select>
@@ -279,7 +277,7 @@ export default function Empleados() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#1e293b', marginBottom: '8px', textTransform: 'uppercase' }}>
               Hora de Salida
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -289,7 +287,7 @@ export default function Empleados() {
               <select value={salMinuto} onChange={(e) => setSalMinuto(e.target.value)} style={estiloSelectTiempo}>
                 {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
-              <select value={salPeriodo} onChange={(e) => setSalPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
+              <select value={salPeriodo} onChange={(e) => setSalPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#ecfdf5' }}>
                 <option value="AM" style={estiloOption}>AM</option>
                 <option value="PM" style={estiloOption}>PM</option>
               </select>
@@ -297,50 +295,50 @@ export default function Empleados() {
           </div>
 
           <div style={{ gridColumn: isMobile ? 'auto' : 'span 2', marginTop: '15px' }}>
-            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '15px', backgroundColor: editandoId ? '#0284c7' : '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)' }}>
-              <Save size={20}/> {editandoId ? 'Guardar Cambios Oficiales' : 'Registrar en el Sistema del Municipio'}
+            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px', background: editandoId ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+              <Save size={20}/> {editandoId ? 'Guardar Cambios Oficiales' : 'Registrar en el Sistema'}
             </button>
           </div>
         </form>
 
         {mensaje.texto && (
-          <div style={{ marginTop: '25px', padding: '15px', borderRadius: '8px', backgroundColor: mensaje.tipo === 'error' ? '#fee2e2' : (mensaje.tipo === 'info' ? '#e0f2fe' : '#d1fae5'), color: mensaje.tipo === 'error' ? '#ef4444' : (mensaje.tipo === 'info' ? '#0369a1' : '#059669'), fontWeight: '600', textAlign: 'center', border: `1px solid ${mensaje.tipo === 'error' ? '#f87171' : (mensaje.tipo === 'info' ? '#7dd3fc' : '#34d399')}`, fontSize: '14px' }}>
+          <div style={{ marginTop: '20px', padding: '15px', borderRadius: '10px', backgroundColor: mensaje.tipo === 'error' ? '#fef2f2' : '#f0fdf4', color: mensaje.tipo === 'error' ? '#ef4444' : '#16a34a', fontWeight: '800', textAlign: 'center', border: `1px solid ${mensaje.tipo === 'error' ? '#fecaca' : '#bbf7d0'}`, fontSize: '14px' }}>
             {mensaje.texto}
           </div>
         )}
       </div>
 
       {/* BITÁCORA / LISTADO DE EMPLEADOS REGISTRADOS */}
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-          <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700', textTransform: 'uppercase' }}>Listado Oficial de Servidores Públicos</h3>
+      <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafafa' }}>
+          <h3 style={{ margin: 0, color: '#1e293b', fontSize: '16px', fontWeight: '800', textTransform: 'uppercase' }}>Listado Oficial de Servidores Públicos</h3>
         </div>
         <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '750px' }}>
             <thead>
-              <tr style={{ backgroundColor: '#f1f5f9', color: '#475569', fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0' }}>Cédula</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0' }}>Nombre Completo</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0' }}>Dirección / Cargo</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0' }}>Horario Asignado</th>
-                <th style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>Acción</th>
+              <tr style={{ backgroundColor: '#f8fafc', color: '#475569', fontSize: '12px', textTransform: 'uppercase', fontWeight: '800' }}>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Cédula</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Nombre Completo</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Dirección / Cargo</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Horario Asignado</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
               {listaEmpleados?.map((emp) => (
-                <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', fontSize: '14px', backgroundColor: editandoId === emp.id ? '#f0f9ff' : 'transparent' }}>
-                  <td style={{ padding: '14px 20px', fontWeight: '700', color: '#0f172a' }}>{emp?.cedula}</td>
-                  <td style={{ padding: '14px 20px', color: '#1e293b', fontWeight: '500' }}>{emp?.nombres} {emp?.apellidos}</td>
-                  <td style={{ padding: '14px 20px', color: '#64748b' }}>
-                    <div style={{ fontWeight: 'bold', color: '#334155' }}>{emp?.departamento}</div>
-                    <div style={{ fontSize: '12px' }}>{emp?.cargo}</div>
+                <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px', transition: 'background 0.2s', backgroundColor: editandoId === emp.id ? '#ecfdf5' : 'transparent' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = editandoId === emp.id ? '#ecfdf5' : '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = editandoId === emp.id ? '#ecfdf5' : 'transparent'}>
+                  <td style={{ padding: '15px 20px', fontWeight: '800', color: '#10b981' }}>{emp?.cedula}</td>
+                  <td style={{ padding: '15px 20px', color: '#1e293b', fontWeight: '700' }}>{emp?.nombres} {emp?.apellidos}</td>
+                  <td style={{ padding: '15px 20px', color: '#64748b' }}>
+                    <div style={{ fontWeight: '800', color: '#334155' }}>{emp?.departamento}</div>
+                    <div style={{ fontSize: '12px', fontWeight: '600' }}>{emp?.cargo}</div>
                   </td>
-                  <td style={{ padding: '14px 20px', color: '#0f172a', fontWeight: '600' }}>
-                    <span style={{ color: '#0284c7' }}>{String(emp?.hora_entrada || '08:00:00').substring(0,5)}</span> a <span style={{ color: '#0f172a' }}>{String(emp?.hora_salida || '16:00:00').substring(0,5)}</span>
-                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 'normal' }}> (+{emp?.tolerancia_minutos || 0}m)</span>
+                  <td style={{ padding: '15px 20px', color: '#0f172a', fontWeight: '700' }}>
+                    <span style={{ color: '#059669' }}>{String(emp?.hora_entrada || '08:00:00').substring(0,5)}</span> a <span style={{ color: '#0f172a' }}>{String(emp?.hora_salida || '16:00:00').substring(0,5)}</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', fontWeight: '600' }}> (+{emp?.tolerancia_minutos || 0}m gracia)</span>
                   </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+                  <td style={{ padding: '15px 20px', textAlign: 'center' }}>
+                    <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1e293b'; e.currentTarget.style.color = 'white' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a' }}>
                       <Pencil size={14} /> Editar
                     </button>
                   </td>
