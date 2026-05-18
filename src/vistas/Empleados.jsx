@@ -262,7 +262,7 @@ export default function Empleados() {
                 {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
               </select>
               <select value={entMinuto} onChange={(e) => setEntMinuto(e.target.value)} style={estiloSelectTiempo}>
-                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option)}
+                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
               <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
                 <option value="AM" style={estiloOption}>AM</option>
