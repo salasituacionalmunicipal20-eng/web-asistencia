@@ -1,75 +1,59 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { LayoutDashboard, Users, LogOut, ShieldCheck } from 'lucide-react'
+import PanelPrincipal from './vistas/PanelPrincipal'
+import Empleados from './vistas/Empleados'
 
 function App() {
-  const [registros, setRegistros] = useState([])
-  const [cargando, setCargando] = useState(true)
+  const [sesionActiva, setSesionActiva] = useState(null)
+  const [vistaActual, setVistaActual] = useState('dashboard')
 
   useEffect(() => {
-    obtenerRegistros()
+    supabase.auth.getSession().then(({ data: { session } }) => setSesionActiva(session))
   }, [])
 
-  async function obtenerRegistros() {
-    setCargando(true)
-    const { data, error } = await supabase
-      .from('asistencia_registros')
-      .select('*')
-      .order('hora_entrada', { ascending: false })
-
-    if (error) {
-      console.error('Error al cargar datos:', error)
-    } else {
-      setRegistros(data)
-    }
-    setCargando(false)
+  if (!sesionActiva) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}>
+        <button onClick={() => supabase.auth.signInWithPassword({ email: prompt("Correo institucional:"), password: prompt("Contraseña:") }).then(r => setSesionActiva(r.data.session))} style={{ padding: '15px 25px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          🔒 Iniciar Sesión - Sistema Alcaldía
+        </button>
+      </div>
+    )
   }
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Panel de Control - Asistencia 🏢</h1>
-      <button 
-        onClick={obtenerRegistros} 
-        style={{ padding: '10px', marginBottom: '20px', cursor: 'pointer', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '5px' }}
-      >
-        Actualizar Datos
-      </button>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      
+      {/* MENÚ LATERAL INSTITUCIONAL */}
+      <div style={{ width: '280px', backgroundColor: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
+          <ShieldCheck size={40} color="#38bdf8" />
+          <div>
+            <h2 style={{ fontSize: '16px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px' }}>Alcaldía de Charallave</h2>
+            <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8' }}>Municipio Cristóbal Rojas</p>
+          </div>
+        </div>
+        
+        <div style={{ padding: '20px', flex: 1 }}>
+          <div onClick={() => setVistaActual('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'dashboard' ? '#0369a1' : 'transparent', color: vistaActual === 'dashboard' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <LayoutDashboard size={20} /> <span style={{ fontWeight: '500' }}>Panel Principal</span>
+          </div>
+          <div onClick={() => setVistaActual('empleados')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0369a1' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <Users size={20} /> <span style={{ fontWeight: '500' }}>Gestión de Personal</span>
+          </div>
+        </div>
 
-      {cargando ? (
-        <p>Cargando registros en tiempo real...</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f2f2f2' }}>
-              <th style={{ border: '1px solid #ddd', padding: '12px' }}>Empleado ID</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px' }}>Fecha</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px' }}>Hora Entrada</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px' }}>Tipo Red</th>
-              <th style={{ border: '1px solid #ddd', padding: '12px' }}>Ubicación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {registros.map((registro) => (
-              <tr key={registro.id}>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{registro.empleado_id}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{registro.fecha}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  {new Date(registro.hora_entrada).toLocaleTimeString()}
-                </td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>{registro.tipo_red || 'N/A'}</td>
-                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${registro.latitud},${registro.longitud}`} 
-                    target="_blank" 
-                    rel="noreferrer"
-                  >
-                    Ver en Mapa
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        <div style={{ padding: '20px', borderTop: '1px solid #1e293b' }}>
+          <button onClick={() => { supabase.auth.signOut(); setSesionActiva(null); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <LogOut size={18} /> Cerrar Sesión
+          </button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+        {vistaActual === 'dashboard' ? <PanelPrincipal /> : <Empleados />}
+      </div>
     </div>
   )
 }
