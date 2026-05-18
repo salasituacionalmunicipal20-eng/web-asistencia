@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList } from 'lucide-react'
 import PanelPrincipal from './vistas/PanelPrincipal'
 import Empleados from './vistas/Empleados'
+// Nuevas Vistas Importadas
+import Justificaciones from './vistas/Justificaciones'
+import Memos from './vistas/Memos'
 
 function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
@@ -144,12 +147,19 @@ function App() {
           </div>
         )}
         
-        <div style={{ padding: '20px', flex: 1 }}>
+        <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
           <div onClick={() => { setVistaActual('dashboard'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'dashboard' ? '#0284c7' : 'transparent', color: vistaActual === 'dashboard' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <LayoutDashboard size={20} /> <span style={{ fontWeight: '500' }}>Panel Principal</span>
           </div>
-          <div onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+          <div onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <Users size={20} /> <span style={{ fontWeight: '500' }}>Gestión de Personal</span>
+          </div>
+          {/* NUEVOS BOTONES AÑADIDOS */}
+          <div onClick={() => { setVistaActual('justificaciones'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'justificaciones' ? '#0284c7' : 'transparent', color: vistaActual === 'justificaciones' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
+            <ClipboardList size={20} /> <span style={{ fontWeight: '500' }}>Justificaciones</span>
+          </div>
+          <div onClick={() => { setVistaActual('memos'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'memos' ? '#0284c7' : 'transparent', color: vistaActual === 'memos' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+            <FileText size={20} /> <span style={{ fontWeight: '500' }}>Memorándums</span>
           </div>
         </div>
 
@@ -163,7 +173,10 @@ function App() {
 
       {/* CONTENIDO PRINCIPAL ADAPTABLE */}
       <div style={{ flex: 1, padding: isMobile ? '15px' : '30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-        {vistaActual === 'dashboard' ? <PanelPrincipal /> : <Empleados />}
+        {vistaActual === 'dashboard' && <PanelPrincipal />}
+        {vistaActual === 'empleados' && <Empleados />}
+        {vistaActual === 'justificaciones' && <Justificaciones />}
+        {vistaActual === 'memos' && <Memos />}
       </div>
     </div>
   )
