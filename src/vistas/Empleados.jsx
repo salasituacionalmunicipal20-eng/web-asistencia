@@ -3,31 +3,59 @@ import { supabase } from '../supabase'
 import { Save, UserPlus } from 'lucide-react'
 
 export default function Empleados() {
+  // Estados para los campos de texto estándar
   const [formulario, setFormulario] = useState({
     cedula: '',
     nombres: '',
     apellidos: '',
     departamento: '',
     cargo: '',
-    hora_entrada: '08:00',
-    hora_salida: '16:00',
     tolerancia_minutos: 15
   })
+
+  // Estados independientes para el control horario AM/PM (100% cliqueable)
+  const [entHora, setEntHora] = useState('08')
+  const [entMinuto, setEntMinuto] = useState('00')
+  const [entPeriodo, setEntPeriodo] = useState('AM')
+
+  const [salHora, setSalHora] = useState('04')
+  const [salMinuto, setSalMinuto] = useState('00')
+  const [salPeriodo, setSalPeriodo] = useState('PM')
+
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
 
   const manejarCambio = (e) => {
     setFormulario({ ...formulario, [e.target.name]: e.target.value })
   }
 
+  // Función matemática para convertir la selección de 12h a la estructura de 24h de Supabase
+  const convertirA24Horas = (hora, minuto, periodo) => {
+    let h = parseInt(hora, 10)
+    if (periodo === 'PM' && h < 12) h += 12
+    if (periodo === 'AM' && h === 12) h = 0
+    const horaString = h.toString().padStart(2, '0')
+    return `${horaString}:${minuto}:00`
+  }
+
   const guardarEmpleado = async (e) => {
     e.preventDefault()
     setMensaje({ texto: 'Procesando registro en el servidor...', tipo: 'info' })
+
+    // Traducimos los dropdowns cliqueables al formato de tiempo requerido
+    const horaEntradaFinal = convertirA24Horas(entHora, entMinuto, entPeriodo)
+    const horaSalidaFinal = convertirA24Horas(salHora, salMinuto, salPeriodo)
+
+    const datosEmpleado = {
+      ...formulario,
+      hora_entrada: horaEntradaFinal,
+      hora_salida: horaSalidaFinal
+    }
     
-    const { error } = await supabase.from('empleados').insert([formulario])
+    const { error } = await supabase.from('empleados').insert([datosEmpleado])
     
     if (error) {
       setMensaje({ 
-        texto: '⛔ Error de Consistencia: Verifique que esta Cédula (Usuario) no esté registrada.', 
+        texto: '⛔ Error de Consistencia: Verifique que esta Cédula no esté registrada.', 
         tipo: 'error' 
       })
     } else {
@@ -35,26 +63,24 @@ export default function Empleados() {
         texto: `✅ Servidor Público Registrado. Usuario App: ${formulario.cedula} | Clave Inicial: 123456`, 
         tipo: 'exito' 
       })
-      setFormulario({ 
-        cedula: '', 
-        nombres: '', 
-        apellidos: '', 
-        departamento: '', 
-        cargo: '', 
-        hora_entrada: '08:00', 
-        hora_salida: '16:00', 
-        tolerancia_minutos: 15 
-      })
+      // Reiniciar formulario
+      setFormulario({ cedula: '', nombres: '', apellidos: '', departamento: '', cargo: '', tolerancia_minutos: 15 })
+      setEntHora('08')
+      setEntMinuto('00')
+      setEntPeriodo('AM')
+      setSalHora('04')
+      setSalMinuto('00')
+      setSalPeriodo('PM')
     }
   }
 
-  // Estilo base de alta visibilidad para los campos de texto
+  // Estilos de alto contraste blindados contra temas oscuros del sistema
   const estiloInputBase = {
     width: '100%',
     padding: '12px',
     boxSizing: 'border-box',
     borderRadius: '8px',
-    border: '1px solid #94a3b8',
+    border: '1px solid #475569',
     fontSize: '16px',
     backgroundColor: '#ffffff',
     color: '#0f172a',
@@ -62,16 +88,29 @@ export default function Empleados() {
     outline: 'none'
   }
 
-  // Estilo especial de súper alto contraste para los selectores de Hora (AM/PM)
-  const estiloInputHora = {
-    ...estiloInputBase,
+  const estiloSelectTiempo = {
+    flex: 1,
+    padding: '12px',
+    borderRadius: '8px',
     border: '2px solid #0284c7',
     backgroundColor: '#ffffff',
     color: '#0f172a',
     fontSize: '16px',
     fontWeight: '700',
-    cursor: 'pointer'
+    textAlign: 'center',
+    cursor: 'pointer',
+    outline: 'none'
   }
+
+  const estiloOption = {
+    color: '#0f172a',
+    backgroundColor: '#ffffff',
+    fontWeight: '600'
+  }
+
+  // Arreglos para renderizar las opciones numéricas
+  const horasDisponibles = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'))
+  const minutosDisponibles = ['00', '15', '30', '45']
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -168,34 +207,6 @@ export default function Empleados() {
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Hora de Entrada (AM / PM)
-            </label>
-            <input 
-              type="time" 
-              name="hora_entrada" 
-              value={formulario.hora_entrada} 
-              onChange={manejarCambio} 
-              required 
-              style={estiloInputHora} 
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Hora de Salida (AM / PM)
-            </label>
-            <input 
-              type="time" 
-              name="hora_salida" 
-              value={formulario.hora_salida} 
-              onChange={manejarCambio} 
-              required 
-              style={estiloInputHora} 
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
               Tolerancia (Minutos de Gracia)
             </label>
             <input 
@@ -208,6 +219,44 @@ export default function Empleados() {
               max="60"
               style={estiloInputBase} 
             />
+          </div>
+
+          {/* SELECTOR DESPLEGABLE HORARIO DE ENTRADA VENEZUELA */}
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Hora de Entrada (Formatos Líquidos)
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select value={entHora} onChange={(e) => setEntHora(e.target.value)} style={estiloSelectTiempo}>
+                {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
+              </select>
+              <select value={entMinuto} onChange={(e) => setEntMinuto(e.target.value)} style={estiloSelectTiempo}>
+                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+              </select>
+              <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
+                <option value="AM" style={estiloOption}>AM</option>
+                <option value="PM" style={estiloOption}>PM</option>
+              </select>
+            </div>
+          </div>
+
+          {/* SELECTOR DESPLEGABLE HORARIO DE SALIDA VENEZUELA */}
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Hora de Salida (Formatos Líquidos)
+            </label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <select value={salHora} onChange={(e) => setSalHora(e.target.value)} style={estiloSelectTiempo}>
+                {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
+              </select>
+              <select value={salMinuto} onChange={(e) => setSalMinuto(e.target.value)} style={estiloSelectTiempo}>
+                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+              </select>
+              <select value={salPeriodo} onChange={(e) => setSalPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
+                <option value="AM" style={estiloOption}>AM</option>
+                <option value="PM" style={estiloOption}>PM</option>
+              </select>
+            </div>
           </div>
 
           <div style={{ gridColumn: 'span 2', marginTop: '15px' }}>
