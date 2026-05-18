@@ -5,7 +5,7 @@ import { Save, UserPlus, Pencil, X } from 'lucide-react'
 export default function Empleados() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [listaEmpleados, setListaEmpleados] = useState([])
-  const [editandoId, setEditandoId] = useState(null) // Controla si estamos creando o editando
+  const [editandoId, setEditandoId] = useState(null)
 
   // Estados para los campos de texto estándar
   const [formulario, setFormulario] = useState({
@@ -52,9 +52,10 @@ export default function Empleados() {
 
   // Función inversa para transformar el formato 24h de Supabase a los dropdowns de 12h
   const desglosarHoraA12h = (hora24) => {
-    if (!hora24) return { hora: '08', minuto: '00', periodo: 'AM' }
-    const [hStr, mStr] = hora24.split(':')
-    let h = parseInt(hStr, 10)
+    if (!hora24 || !hora24.includes(':')) return { hora: '08', minuto: '00', periodo: 'AM' }
+    const partes = hora24.split(':')
+    let h = parseInt(partes[0], 10)
+    let mStr = partes[1] || '00'
     let periodo = 'AM'
     
     if (h >= 12) {
@@ -124,11 +125,9 @@ export default function Empleados() {
     let resultadoError = null
 
     if (editandoId) {
-      // Operación de Modificación (UPDATE)
       const { error } = await supabase.from('empleados').update(datosEmpleado).eq('id', editandoId)
       resultadoError = error
     } else {
-      // Operación de Inserción estándar (INSERT)
       const { error } = await supabase.from('empleados').insert([datosEmpleado])
       resultadoError = error
     }
@@ -144,7 +143,7 @@ export default function Empleados() {
         tipo: 'exito' 
       })
       cancelarEdicion()
-      obtenerEmpleados() // Recargar tabla en tiempo real
+      obtenerEmpleados()
     }
   }
 
@@ -183,7 +182,7 @@ export default function Empleados() {
   }
 
   const horasDisponibles = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'))
-  const minutosDisponibles = ['00', '15', '30', '45']
+  const minutesDisponibles = ['00', '15', '30', '45']
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
@@ -262,7 +261,7 @@ export default function Empleados() {
                 {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
               </select>
               <select value={entMinuto} onChange={(e) => setEntMinuto(e.target.value)} style={estiloSelectTiempo}>
-                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+                {minutesDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
               <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
                 <option value="AM" style={estiloOption}>AM</option>
@@ -280,7 +279,7 @@ export default function Empleados() {
                 {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
               </select>
               <select value={salMinuto} onChange={(e) => setSalMinuto(e.target.value)} style={estiloSelectTiempo}>
-                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+                {minutesDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
               <select value={salPeriodo} onChange={(e) => setSalPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
                 <option value="AM" style={estiloOption}>AM</option>
@@ -329,11 +328,11 @@ export default function Empleados() {
                     <div style={{ fontSize: '12px' }}>{emp.cargo}</div>
                   </td>
                   <td style={{ padding: '14px 20px', color: '#0f172a', fontWeight: '600' }}>
-                    <span style={{ color: '#0284c7' }}>{emp.hora_entrada.substring(0,5)}</span> a <span style={{ color: '#0f172a' }}>{emp.hora_salida.substring(0,5)}</span>
-                    <span style={{ fontSize: '11px', color: '#64748b', block: 'block', fontWeight: 'normal' }}> (+{emp.tolerancia_minutos}m)</span>
+                    <span style={{ color: '#0284c7' }}>{emp.hora_entrada ? emp.hora_entrada.substring(0,5) : '08:00'}</span> a <span style={{ color: '#0f172a' }}>{emp.hora_salida ? emp.hora_salida.substring(0,5) : '16:00'}</span>
+                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 'normal' }}> (+{emp.tolerancia_minutos}m)</span>
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                    <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', transition: 'opacity 0.2s' }}>
+                    <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
                       <Pencil size={14} /> Editar
                     </button>
                   </td>

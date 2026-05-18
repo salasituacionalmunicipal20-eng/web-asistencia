@@ -8,7 +8,7 @@ function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
   const [vistaActual, setVistaActual] = useState('dashboard')
   
-  // Adaptabilidad para teléfonos (Conserva intacta tu lógica)
+  // Control responsivo sin alterar tus variables ni funciones
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [menuAbiertoMobile, setMenuAbiertoMobile] = useState(false)
   
@@ -21,7 +21,6 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSesionActiva(session))
     
-    // Escucha el tamaño de la pantalla en tiempo real
     const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
     window.addEventListener('resize', verificarPantalla)
     return () => window.removeEventListener('resize', verificarPantalla)
@@ -104,12 +103,12 @@ function App() {
   }
 
   // ========================================================
-  // PANEL ADMINISTRATIVO PRINCIPAL (COMPLETAMENTE RESPONSIVO)
+  // PANEL ADMINISTRATIVO PRINCIPAL
   // ========================================================
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
-      {/* BARRA SUPERIOR SÓLO EN PANTALLAS MÓVILES */}
+      {/* BARRA SUPERIOR ADAPTABLE SÓLO PARA SMARTPHONES */}
       {isMobile && (
         <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 1000 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -122,7 +121,7 @@ function App() {
         </div>
       )}
 
-      {/* MENÚ LATERAL CORREGIDO (SE COLAPSA SÓLO EN TELÉFONOS) */}
+      {/* MENÚ LATERAL ORIGINAL (SE OCULTA AUTOMÁTICAMENTE EN MÓVIL SI NO ESTÁ DESPLEGADO) */}
       <div style={{ 
         width: isMobile ? '100%' : '280px', 
         backgroundColor: '#0f172a', 
