@@ -28,6 +28,13 @@ export default function Empleados() {
 
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
 
+  // ==========================================
+  // FUNCIÓN RESTAURADA: Manejador de eventos de teclado
+  // ==========================================
+  const manejarCambio = (e) => {
+    setFormulario({ ...formulario, [e.target.name]: e.target.value })
+  }
+
   useEffect(() => {
     obtenerEmpleados()
     const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
