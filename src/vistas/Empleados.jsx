@@ -1,8 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { Save, UserPlus } from 'lucide-react'
 
 export default function Empleados() {
+  // Estado para detectar de forma automática si es un teléfono celular
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', verificarPantalla)
+    return () => window.removeEventListener('resize', verificarPantalla)
+  }, [])
+
   // Estados para los campos de texto estándar
   const [formulario, setFormulario] = useState({
     cedula: '',
@@ -113,9 +122,9 @@ export default function Empleados() {
   const minutosDisponibles = ['00', '15', '30', '45']
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
       <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: '28px', fontWeight: '800' }}>
+        <h1 style={{ margin: '0 0 5px 0', color: '#0f172a', fontSize: isMobile ? '24px' : '28px', fontWeight: '800' }}>
           Gestión de Talento Humano
         </h1>
         <p style={{ margin: 0, color: '#64748b', fontSize: '15px' }}>
@@ -123,12 +132,13 @@ export default function Empleados() {
         </p>
       </div>
 
-      <div style={{ backgroundColor: 'white', padding: '35px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}>
+      <div style={{ backgroundColor: 'white', padding: isMobile ? '20px' : '35px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}>
         <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: 0, color: '#0284c7', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           <UserPlus size={22} /> Formulario de Registro Oficial
         </h3>
         
-        <form onSubmit={guardarEmpleado} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px', marginTop: '25px' }}>
+        {/* Cambia dinámicamente de 2 columnas en PC a 1 columna en teléfonos celulares */}
+        <form onSubmit={guardarEmpleado} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '25px', marginTop: '25px' }}>
           
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#334155', marginBottom: '8px', textTransform: 'uppercase' }}>
@@ -259,7 +269,7 @@ export default function Empleados() {
             </div>
           </div>
 
-          <div style={{ gridColumn: 'span 2', marginTop: '15px' }}>
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2', marginTop: '15px' }}>
             <button 
               type="submit" 
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '15px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.15)' }}

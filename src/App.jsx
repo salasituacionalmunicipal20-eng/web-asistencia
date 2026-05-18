@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X } from 'lucide-react'
 import PanelPrincipal from './vistas/PanelPrincipal'
 import Empleados from './vistas/Empleados'
 
 function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
   const [vistaActual, setVistaActual] = useState('dashboard')
+  
+  // Adaptabilidad para teléfonos (Conserva intacta tu lógica)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [menuAbiertoMobile, setMenuAbiertoMobile] = useState(false)
   
   // Estados para el formulario directo en pantalla
   const [correoInput, setCorreoInput] = useState('')
@@ -16,6 +20,11 @@ function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSesionActiva(session))
+    
+    // Escucha el tamaño de la pantalla en tiempo real
+    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', verificarPantalla)
+    return () => window.removeEventListener('resize', verificarPantalla)
   }, [])
 
   const manejarLoginDirecto = async (e) => {
@@ -41,8 +50,8 @@ function App() {
   // ========================================================
   if (!sesionActiva) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', width: '100%', maxWidth: '400px' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '15px', boxSizing: 'border-box' }}>
+        <div style={{ backgroundColor: 'white', padding: isMobile ? '25px' : '40px', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', width: '100%', maxWidth: '400px', boxSizing: 'border-box' }}>
           
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
             <ShieldCheck size={48} color="#0284c7" style={{ margin: '0 auto 10px' }} />
@@ -95,26 +104,52 @@ function App() {
   }
 
   // ========================================================
-  // PANEL ADMINISTRATIVO PRINCIPAL
+  // PANEL ADMINISTRATIVO PRINCIPAL (COMPLETAMENTE RESPONSIVO)
   // ========================================================
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       
-      {/* MENÚ LATERAL */}
-      <div style={{ width: '280px', backgroundColor: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
-          <ShieldCheck size={40} color="#38bdf8" />
-          <div>
-            <h2 style={{ fontSize: '15px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>Alcaldía de Charallave</h2>
-            <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8' }}>Municipio Cristóbal Rojas</p>
+      {/* BARRA SUPERIOR SÓLO EN PANTALLAS MÓVILES */}
+      {isMobile && (
+        <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 1000 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShieldCheck size={24} color="#38bdf8" />
+            <span style={{ fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>Alcaldía de Charallave</span>
           </div>
+          <button onClick={() => setMenuAbiertoMobile(!menuAbiertoMobile)} style={{ backgroundColor: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            {menuAbiertoMobile ? <X size={26} /> : <Menu size={26} />}
+          </button>
         </div>
+      )}
+
+      {/* MENÚ LATERAL CORREGIDO (SE COLAPSA SÓLO EN TELÉFONOS) */}
+      <div style={{ 
+        width: isMobile ? '100%' : '280px', 
+        backgroundColor: '#0f172a', 
+        color: 'white', 
+        display: isMobile ? (menuAbiertoMobile ? 'flex' : 'none') : 'flex', 
+        flexDirection: 'column',
+        position: isMobile ? 'fixed' : 'static',
+        top: '57px',
+        left: 0,
+        height: isMobile ? 'calc(100vh - 57px)' : 'auto',
+        zIndex: 999
+      }}>
+        {!isMobile && (
+          <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
+            <ShieldCheck size={40} color="#38bdf8" />
+            <div>
+              <h2 style={{ fontSize: '15px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>Alcaldía de Charallave</h2>
+              <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8' }}>Municipio Cristóbal Rojas</p>
+            </div>
+          </div>
+        )}
         
         <div style={{ padding: '20px', flex: 1 }}>
-          <div onClick={() => setVistaActual('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'dashboard' ? '#0284c7' : 'transparent', color: vistaActual === 'dashboard' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
+          <div onClick={() => { setVistaActual('dashboard'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'dashboard' ? '#0284c7' : 'transparent', color: vistaActual === 'dashboard' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <LayoutDashboard size={20} /> <span style={{ fontWeight: '500' }}>Panel Principal</span>
           </div>
-          <div onClick={() => setVistaActual('empleados')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+          <div onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
             <Users size={20} /> <span style={{ fontWeight: '500' }}>Gestión de Personal</span>
           </div>
         </div>
@@ -127,7 +162,8 @@ function App() {
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+      {/* CONTENIDO PRINCIPAL ADAPTABLE */}
+      <div style={{ flex: 1, padding: isMobile ? '15px' : '30px', boxSizing: 'border-box', overflowY: 'auto' }}>
         {vistaActual === 'dashboard' ? <PanelPrincipal /> : <Empleados />}
       </div>
     </div>
