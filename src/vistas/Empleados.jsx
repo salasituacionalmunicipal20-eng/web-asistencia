@@ -52,9 +52,10 @@ export default function Empleados() {
 
   // Función inversa para transformar el formato 24h de Supabase a los dropdowns de 12h
   const desglosarHoraA12h = (hora24) => {
-    if (!hora24 || !hora24.includes(':')) return { hora: '08', minuto: '00', periodo: 'AM' }
-    const partes = hora24.split(':')
-    let h = parseInt(partes[0], 10)
+    const horaSegura = String(hora24 || '08:00:00')
+    if (!horaSegura.includes(':')) return { hora: '08', minuto: '00', periodo: 'AM' }
+    const partes = horaSegura.split(':')
+    let h = parseInt(partes[0], 10) || 8
     let mStr = partes[1] || '00'
     let periodo = 'AM'
     
@@ -182,7 +183,7 @@ export default function Empleados() {
   }
 
   const horasDisponibles = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'))
-  const minutesDisponibles = ['00', '15', '30', '45']
+  const minutosDisponibles = ['00', '15', '30', '45']
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
@@ -261,7 +262,7 @@ export default function Empleados() {
                 {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
               </select>
               <select value={entMinuto} onChange={(e) => setEntMinuto(e.target.value)} style={estiloSelectTiempo}>
-                {minutesDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option)}
               </select>
               <select value={entPeriodo} onChange={(e) => setEntPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
                 <option value="AM" style={estiloOption}>AM</option>
@@ -279,7 +280,7 @@ export default function Empleados() {
                 {horasDisponibles.map(h => <option key={h} value={h} style={estiloOption}>{h} h</option>)}
               </select>
               <select value={salMinuto} onChange={(e) => setSalMinuto(e.target.value)} style={estiloSelectTiempo}>
-                {minutesDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
+                {minutosDisponibles.map(m => <option key={m} value={m} style={estiloOption}>{m} min</option>)}
               </select>
               <select value={salPeriodo} onChange={(e) => setSalPeriodo(e.target.value)} style={{ ...estiloSelectTiempo, backgroundColor: '#f0f9ff' }}>
                 <option value="AM" style={estiloOption}>AM</option>
@@ -319,17 +320,17 @@ export default function Empleados() {
               </tr>
             </thead>
             <tbody>
-              {listaEmpleados.map((emp) => (
+              {listaEmpleados?.map((emp) => (
                 <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', fontSize: '14px', backgroundColor: editandoId === emp.id ? '#f0f9ff' : 'transparent' }}>
-                  <td style={{ padding: '14px 20px', fontWeight: '700', color: '#0f172a' }}>{emp.cedula}</td>
-                  <td style={{ padding: '14px 20px', color: '#1e293b', fontWeight: '500' }}>{emp.nombres} {emp.apellidos}</td>
+                  <td style={{ padding: '14px 20px', fontWeight: '700', color: '#0f172a' }}>{emp?.cedula}</td>
+                  <td style={{ padding: '14px 20px', color: '#1e293b', fontWeight: '500' }}>{emp?.nombres} {emp?.apellidos}</td>
                   <td style={{ padding: '14px 20px', color: '#64748b' }}>
-                    <div style={{ fontWeight: 'bold', color: '#334155' }}>{emp.departamento}</div>
-                    <div style={{ fontSize: '12px' }}>{emp.cargo}</div>
+                    <div style={{ fontWeight: 'bold', color: '#334155' }}>{emp?.departamento}</div>
+                    <div style={{ fontSize: '12px' }}>{emp?.cargo}</div>
                   </td>
                   <td style={{ padding: '14px 20px', color: '#0f172a', fontWeight: '600' }}>
-                    <span style={{ color: '#0284c7' }}>{emp.hora_entrada ? emp.hora_entrada.substring(0,5) : '08:00'}</span> a <span style={{ color: '#0f172a' }}>{emp.hora_salida ? emp.hora_salida.substring(0,5) : '16:00'}</span>
-                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 'normal' }}> (+{emp.tolerancia_minutos}m)</span>
+                    <span style={{ color: '#0284c7' }}>{String(emp?.hora_entrada || '08:00:00').substring(0,5)}</span> a <span style={{ color: '#0f172a' }}>{String(emp?.hora_salida || '16:00:00').substring(0,5)}</span>
+                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 'normal' }}> (+{emp?.tolerancia_minutos || 0}m)</span>
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                     <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
@@ -338,7 +339,7 @@ export default function Empleados() {
                   </td>
                 </tr>
               ))}
-              {listaEmpleados.length === 0 && (
+              {(!listaEmpleados || listaEmpleados.length === 0) && (
                 <tr>
                   <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
                 </tr>
