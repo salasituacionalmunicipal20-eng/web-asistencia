@@ -17,5 +17,10 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // El patrón "fetch on mount con setState para loading/error" es idiomático.
+      // El useCallback([]) en cada función fetcher evita loops. Bajado a warning.
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
 ])

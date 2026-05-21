@@ -1,25 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { CheckCircle, XCircle, ClipboardList, Camera } from 'lucide-react'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Justificaciones() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useIsMobile()
   const [lista, setLista] = useState([])
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+
+  const obtenerDatos = useCallback(async () => {
+    setCargando(true)
+    setError('')
+    const { data, error: errBd } = await supabase.from('justificaciones').select('*').order('fecha_solicitud', { ascending: false })
+    if (errBd) {
+      setError(`No se pudieron cargar las justificaciones: ${errBd.message}`)
+    } else {
+      setLista(data || [])
+    }
+    setCargando(false)
+  }, [])
 
   useEffect(() => {
     obtenerDatos()
-    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', verificarPantalla)
-    return () => window.removeEventListener('resize', verificarPantalla)
-  }, [])
-
-  async function obtenerDatos() {
-    const { data } = await supabase.from('justificaciones').select('*').order('fecha_solicitud', { ascending: false })
-    if (data) setLista(data)
-  }
+  }, [obtenerDatos])
 
   const cambiarEstado = async (id, nuevoEstado) => {
-    await supabase.from('justificaciones').update({ estado: nuevoEstado }).eq('id', id)
+    const { error: errUpd } = await supabase.from('justificaciones').update({ estado: nuevoEstado }).eq('id', id)
+    if (errUpd) {
+      alert(`No se pudo actualizar la justificación: ${errUpd.message}`)
+      return
+    }
     obtenerDatos()
   }
 
@@ -81,7 +92,13 @@ export default function Justificaciones() {
                   </td>
                 </tr>
               ))}
-              {(!lista || lista.length === 0) && (
+              {cargando && lista.length === 0 && (
+                <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: '600' }}>Cargando justificaciones...</td></tr>
+              )}
+              {!cargando && error && (
+                <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {error}</td></tr>
+              )}
+              {!cargando && !error && lista.length === 0 && (
                 <tr><td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: '600' }}>No hay justificaciones pendientes de revisión.</td></tr>
               )}
             </tbody>

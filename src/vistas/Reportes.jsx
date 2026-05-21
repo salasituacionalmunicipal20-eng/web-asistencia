@@ -1,53 +1,79 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { BookOpen, Download, Search, UserCheck, Calendar, Clock, AlertCircle } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Reportes() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useIsMobile()
   const [empleados, setEmpleados] = useState([])
   const [asistencias, setAsistencias] = useState([])
   const [justificaciones, setJustificaciones] = useState([])
-  
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+
   const [busqueda, setBusqueda] = useState('')
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null)
 
-  useEffect(() => {
-    cargarTodaLaData()
-    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', verificarPantalla)
-    return () => window.removeEventListener('resize', verificarPantalla)
+  const cargarTodaLaData = useCallback(async () => {
+    setCargando(true)
+    setError('')
+    const [resEmp, resAsist, resJust] = await Promise.all([
+      supabase.from('empleados').select('*').order('nombres', { ascending: true }),
+      supabase.from('asistencia_registros').select('*').order('fecha', { ascending: false }),
+      supabase.from('justificaciones').select('*').order('fecha_falta', { ascending: false }),
+    ])
+    const errBd = resEmp.error || resAsist.error || resJust.error
+    if (errBd) {
+      setError(`No se pudo cargar la data: ${errBd.message}`)
+    } else {
+      setEmpleados(resEmp.data || [])
+      setAsistencias(resAsist.data || [])
+      setJustificaciones(resJust.data || [])
+    }
+    setCargando(false)
   }, [])
 
-  async function cargarTodaLaData() {
-    const resEmp = await supabase.from('empleados').select('*').order('nombres', { ascending: true })
-    if (resEmp.data) setEmpleados(resEmp.data)
+  useEffect(() => {
+    cargarTodaLaData()
+  }, [cargarTodaLaData])
 
-    const resAsist = await supabase.from('asistencia_registros').select('*').order('fecha', { ascending: false })
-    if (resAsist.data) setAsistencias(resAsist.data)
+  // Indexamos asistencias y justificaciones por cédula UNA SOLA VEZ por cambio de datos,
+  // así obtenerHistorialCombinado() ya no hace .filter() sobre toda la lista en cada render.
+  const indicePorCedula = useMemo(() => {
+    const indice = new Map()
+    asistencias.forEach((a) => {
+      if (!indice.has(a.empleado_id)) indice.set(a.empleado_id, { asis: [], just: [] })
+      indice.get(a.empleado_id).asis.push(a)
+    })
+    justificaciones.forEach((j) => {
+      if (!indice.has(j.empleado_id)) indice.set(j.empleado_id, { asis: [], just: [] })
+      indice.get(j.empleado_id).just.push(j)
+    })
+    return indice
+  }, [asistencias, justificaciones])
 
-    const resJust = await supabase.from('justificaciones').select('*').order('fecha_falta', { ascending: false })
-    if (resJust.data) setJustificaciones(resJust.data)
-  }
-
-  // Combinar el historial del empleado seleccionado
-  const obtenerHistorialCombinado = (cedula) => {
-    const asis = asistencias.filter(a => a.empleado_id === cedula).map(a => ({
+  const obtenerHistorialCombinado = useCallback((cedula) => {
+    const datos = indicePorCedula.get(cedula) || { asis: [], just: [] }
+    const asis = datos.asis.map(a => ({
       tipo: 'Asistencia',
       fecha: a.fecha,
-      detalle: `Entrada: ${new Date(a.hora_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} | Salida: ${a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Sin Marcar'}`
+      detalle: `Entrada: ${new Date(a.hora_entrada).toLocaleTimeString('es-VE', {hour: '2-digit', minute:'2-digit'})} | Salida: ${a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString('es-VE', {hour: '2-digit', minute:'2-digit'}) : 'Sin Marcar'}`
     }))
-    
-    const just = justificaciones.filter(j => j.empleado_id === cedula).map(j => ({
+    const just = datos.just.map(j => ({
       tipo: 'Justificación',
       fecha: String(j.fecha_falta).substring(0,10),
       detalle: `Motivo: ${j.motivo} | Estatus: ${j.estado}`
     }))
-
-    // Unir y ordenar por fecha descendente
     return [...asis, ...just].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-  }
+  }, [indicePorCedula])
+
+  // Historial del empleado actualmente seleccionado — recalculado solo si cambian datos
+  const historialEmpleadoActual = useMemo(
+    () => empleadoSeleccionado ? obtenerHistorialCombinado(empleadoSeleccionado.cedula) : [],
+    [empleadoSeleccionado, obtenerHistorialCombinado]
+  )
 
   const empleadosFiltrados = empleados.filter(emp => 
     `${emp.nombres} ${emp.apellidos} ${emp.cedula}`.toLowerCase().includes(busqueda.toLowerCase())
@@ -124,6 +150,15 @@ export default function Reportes() {
             />
           </div>
 
+          {error && (
+            <div style={{ padding: '12px 15px', backgroundColor: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', fontWeight: 600 }}>
+              ⛔ {error}
+            </div>
+          )}
+          {cargando && empleados.length === 0 && (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando data...</div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {empleadosFiltrados.map(emp => (
               <div 
@@ -153,7 +188,7 @@ export default function Reportes() {
               </h3>
               
               <div style={{ maxHeight: '55vh', overflowY: 'auto', paddingRight: '10px' }}>
-                {obtenerHistorialCombinado(empleadoSeleccionado.cedula).map((item, index) => (
+                {historialEmpleadoActual.map((item, index) => (
                   <div key={index} style={{ marginBottom: '15px', padding: '15px', borderRadius: '12px', borderLeft: `4px solid ${item.tipo === 'Asistencia' ? '#10b981' : '#f59e0b'}`, backgroundColor: '#f8fafc' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <span style={{ fontSize: '12px', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -170,7 +205,7 @@ export default function Reportes() {
                   </div>
                 ))}
 
-                {obtenerHistorialCombinado(empleadoSeleccionado.cedula).length === 0 && (
+                {historialEmpleadoActual.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', fontWeight: '600' }}>El servidor público no presenta actividad reciente.</div>
                 )}
               </div>

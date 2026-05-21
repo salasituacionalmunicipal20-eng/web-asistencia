@@ -1,24 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { MapPin, Users, Calendar as CalendarIcon, Clock, Download, CheckCircle } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function PanelPrincipal() {
   const [registros, setRegistros] = useState([])
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+  const isMobile = useIsMobile()
+
+  const obtenerRegistros = useCallback(async () => {
+    setCargando(true)
+    setError('')
+    const { data, error: errBd } = await supabase
+      .from('asistencia_registros')
+      .select('*')
+      .order('hora_entrada', { ascending: false })
+    if (errBd) {
+      setError(`No se pudieron cargar los registros: ${errBd.message}`)
+    } else {
+      setRegistros(data || [])
+    }
+    setCargando(false)
+  }, [])
 
   useEffect(() => {
     obtenerRegistros()
-    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', verificarPantalla)
-    return () => window.removeEventListener('resize', verificarPantalla)
-  }, [])
-
-  async function obtenerRegistros() {
-    const { data } = await supabase.from('asistencia_registros').select('*').order('hora_entrada', { ascending: false })
-    if (data) setRegistros(data)
-  }
+  }, [obtenerRegistros])
 
   const generarPDF = () => {
     const doc = new jsPDF()
@@ -59,8 +69,8 @@ export default function PanelPrincipal() {
           <p style={{ margin: 0, fontSize: '15px', opacity: 0.9 }}>Salas Situacionales - Municipio Cristóbal Rojas</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', width: isMobile ? '100%' : 'auto' }}>
-          <button onClick={obtenerRegistros} style={{ flex: isMobile ? 1 : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', backdropFilter: 'blur(10px)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}>
-            Actualizar
+          <button onClick={obtenerRegistros} disabled={cargando} style={{ flex: isMobile ? 1 : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '10px', cursor: cargando ? 'wait' : 'pointer', opacity: cargando ? 0.6 : 1, fontWeight: 'bold', backdropFilter: 'blur(10px)', transition: 'background 0.2s' }}>
+            {cargando ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button onClick={generarPDF} style={{ flex: isMobile ? 1 : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: 'white', color: '#0369a1', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '900', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
             <Download size={18} /> Exportar PDF
@@ -95,6 +105,15 @@ export default function PanelPrincipal() {
               </tr>
             </thead>
             <tbody>
+              {cargando && registros.length === 0 && (
+                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando registros...</td></tr>
+              )}
+              {!cargando && error && (
+                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {error}</td></tr>
+              )}
+              {!cargando && !error && registros.length === 0 && (
+                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>No hay registros de asistencia.</td></tr>
+              )}
               {registros.map((registro) => (
                 <tr key={registro.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}>
                   <td style={{ padding: '15px 20px', fontWeight: '800', color: '#0369a1' }}>{registro.empleado_id}</td>

@@ -1,11 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { Save, UserPlus, Pencil, X, Users } from 'lucide-react'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useIsMobile()
   const [listaEmpleados, setListaEmpleados] = useState([])
+  const [cargandoLista, setCargandoLista] = useState(false)
+  const [errorLista, setErrorLista] = useState('')
+  const [guardando, setGuardando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
+
+  const obtenerEmpleados = useCallback(async () => {
+    setCargandoLista(true)
+    setErrorLista('')
+    const { data, error: errBd } = await supabase.from('empleados').select('*').order('nombres', { ascending: true })
+    if (errBd) {
+      setErrorLista(`No se pudo cargar el listado: ${errBd.message}`)
+    } else {
+      setListaEmpleados(data || [])
+    }
+    setCargandoLista(false)
+  }, [])
 
   // Estados para los campos de texto estándar
   const [formulario, setFormulario] = useState({
@@ -37,16 +53,7 @@ export default function Empleados() {
 
   useEffect(() => {
     obtenerEmpleados()
-    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', verificarPantalla)
-    return () => window.removeEventListener('resize', verificarPantalla)
-  }, [])
-
-  // Cargar lista de empleados desde Supabase
-  async function obtenerEmpleados() {
-    const { data } = await supabase.from('empleados').select('*').order('nombres', { ascending: true })
-    if (data) setListaEmpleados(data)
-  }
+  }, [obtenerEmpleados])
 
   // Función matemática para convertir la selección de 12h a la estructura de 24h de Supabase
   const convertirA24Horas = (hora, minuto, periodo) => {
@@ -119,6 +126,7 @@ export default function Empleados() {
 
   const guardarEmpleado = async (e) => {
     e.preventDefault()
+    setGuardando(true)
     setMensaje({ texto: 'Procesando operación en el servidor...', tipo: 'info' })
 
     const horaEntradaFinal = convertirA24Horas(entHora, entMinuto, entPeriodo)
@@ -126,29 +134,24 @@ export default function Empleados() {
 
     const datosEmpleado = {
       ...formulario,
+      tolerancia_minutos: Number(formulario.tolerancia_minutos) || 0, // input number devuelve string
       hora_entrada: horaEntradaFinal,
-      hora_salida: horaSalidaFinal
+      hora_salida: horaSalidaFinal,
     }
-    
-    let resultadoError = null
 
-    if (editandoId) {
-      const { error } = await supabase.from('empleados').update(datosEmpleado).eq('id', editandoId)
-      resultadoError = error
-    } else {
-      const { error } = await supabase.from('empleados').insert([datosEmpleado])
-      resultadoError = error
-    }
-    
+    const { error: resultadoError } = editandoId
+      ? await supabase.from('empleados').update(datosEmpleado).eq('id', editandoId)
+      : await supabase.from('empleados').insert([datosEmpleado])
+
+    setGuardando(false)
+
     if (resultadoError) {
-      setMensaje({ 
-        texto: '⛔ Error: Verifique consistencia de datos o duplicidad de Cédula.', 
-        tipo: 'error' 
-      })
+      const detalle = resultadoError.message || 'Verifique consistencia de datos o duplicidad de cédula.'
+      setMensaje({ texto: `⛔ Error: ${detalle}`, tipo: 'error' })
     } else {
-      setMensaje({ 
-        texto: editandoId ? '✅ Datos modificados y actualizados con éxito.' : `✅ Servidor Público Registrado. Usuario App: ${formulario.cedula}`, 
-        tipo: 'exito' 
+      setMensaje({
+        texto: editandoId ? '✅ Datos modificados y actualizados con éxito.' : `✅ Servidor Público Registrado. Usuario App: ${formulario.cedula}`,
+        tipo: 'exito'
       })
       cancelarEdicion()
       obtenerEmpleados()
@@ -295,8 +298,8 @@ export default function Empleados() {
           </div>
 
           <div style={{ gridColumn: isMobile ? 'auto' : 'span 2', marginTop: '15px' }}>
-            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px', background: editandoId ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-              <Save size={20}/> {editandoId ? 'Guardar Cambios Oficiales' : 'Registrar en el Sistema'}
+            <button type="submit" disabled={guardando} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px', background: editandoId ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: '900', cursor: guardando ? 'wait' : 'pointer', opacity: guardando ? 0.7 : 1, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+              <Save size={20}/> {guardando ? 'Procesando...' : (editandoId ? 'Guardar Cambios Oficiales' : 'Registrar en el Sistema')}
             </button>
           </div>
         </form>
@@ -344,7 +347,13 @@ export default function Empleados() {
                   </td>
                 </tr>
               ))}
-              {(!listaEmpleados || listaEmpleados.length === 0) && (
+              {cargandoLista && listaEmpleados.length === 0 && (
+                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando listado...</td></tr>
+              )}
+              {!cargandoLista && errorLista && (
+                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
+              )}
+              {!cargandoLista && !errorLista && listaEmpleados.length === 0 && (
                 <tr>
                   <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
                 </tr>

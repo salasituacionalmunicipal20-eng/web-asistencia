@@ -1,35 +1,54 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { Save, FileText, Search, UserCheck } from 'lucide-react'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Memos() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useIsMobile()
   const [lista, setLista] = useState([])
-  const [empleados, setEmpleados] = useState([]) // Nueva lista de empleados
-  const [busqueda, setBusqueda] = useState('') // Buscador en vivo
+  const [empleados, setEmpleados] = useState([])
+  const [busqueda, setBusqueda] = useState('')
   const [mostrarDropdown, setMostrarDropdown] = useState(false)
-  
+  const [cargandoLista, setCargandoLista] = useState(false)
+  const [errorLista, setErrorLista] = useState('')
+  const [enviando, setEnviando] = useState(false)
+
   const [formulario, setFormulario] = useState({ empleado_id: '', titulo: '', descripcion: '' })
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
+
+  // Cierra el dropdown del buscador cuando se hace click fuera de él
+  const buscadorRef = useRef(null)
+  useEffect(() => {
+    const onClickFuera = (e) => {
+      if (buscadorRef.current && !buscadorRef.current.contains(e.target)) {
+        setMostrarDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickFuera)
+    return () => document.removeEventListener('mousedown', onClickFuera)
+  }, [])
+
+  const obtenerMemos = useCallback(async () => {
+    setCargandoLista(true)
+    setErrorLista('')
+    const { data, error: errBd } = await supabase.from('memorandums').select('*').order('fecha_emision', { ascending: false })
+    if (errBd) {
+      setErrorLista(`No se pudo cargar el historial: ${errBd.message}`)
+    } else {
+      setLista(data || [])
+    }
+    setCargandoLista(false)
+  }, [])
+
+  const obtenerEmpleados = useCallback(async () => {
+    const { data, error: errBd } = await supabase.from('empleados').select('cedula, nombres, apellidos').order('nombres', { ascending: true })
+    if (!errBd && data) setEmpleados(data)
+  }, [])
 
   useEffect(() => {
     obtenerMemos()
     obtenerEmpleados()
-    const verificarPantalla = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', verificarPantalla)
-    return () => window.removeEventListener('resize', verificarPantalla)
-  }, [])
-
-  async function obtenerMemos() {
-    const { data } = await supabase.from('memorandums').select('*').order('fecha_emision', { ascending: false })
-    if (data) setLista(data)
-  }
-
-  // Descargamos los empleados para el buscador
-  async function obtenerEmpleados() {
-    const { data } = await supabase.from('empleados').select('cedula, nombres, apellidos').order('nombres', { ascending: true })
-    if (data) setEmpleados(data)
-  }
+  }, [obtenerMemos, obtenerEmpleados])
 
   const manejarCambio = (e) => setFormulario({ ...formulario, [e.target.name]: e.target.value })
 
@@ -50,11 +69,13 @@ export default function Memos() {
       setMensaje({ texto: '⛔ Selecciona un empleado de la lista primero.', tipo: 'error' })
       return
     }
+    setEnviando(true)
     setMensaje({ texto: 'Enviando memorándum...', tipo: 'info' })
     const { error } = await supabase.from('memorandums').insert([{ ...formulario }])
-    
+    setEnviando(false)
+
     if (error) {
-      setMensaje({ texto: '⛔ Hubo un error al enviar el memorándum.', tipo: 'error' })
+      setMensaje({ texto: `⛔ Hubo un error al enviar el memorándum: ${error.message}`, tipo: 'error' })
     } else {
       setMensaje({ texto: `✅ Memorándum enviado a la Cédula: ${formulario.empleado_id}`, tipo: 'exito' })
       setFormulario({ empleado_id: '', titulo: '', descripcion: '' })
@@ -81,7 +102,7 @@ export default function Memos() {
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '20px' }}>
             
             {/* BUSCADOR DE EMPLEADOS EN TIEMPO REAL */}
-            <div style={{ position: 'relative' }}>
+            <div ref={buscadorRef} style={{ position: 'relative' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#4f46e5', marginBottom: '8px', textTransform: 'uppercase' }}>Buscar Empleado</label>
               <div style={{ position: 'relative' }}>
                 <Search size={18} color="#64748b" style={{ position: 'absolute', left: '12px', top: '15px' }} />
@@ -121,8 +142,8 @@ export default function Memos() {
             <textarea name="descripcion" value={formulario.descripcion} onChange={manejarCambio} required rows="4" placeholder="Redacte aquí el motivo oficial..." style={{ ...estiloInput, resize: 'vertical' }}></textarea>
           </div>
 
-          <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px', background: 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.3)', transition: 'transform 0.1s' }} onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'} onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-            <Save size={20}/> Emitir Memorándum Oficial
+          <button type="submit" disabled={enviando} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px', background: 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)', color: 'white', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: enviando ? 'wait' : 'pointer', opacity: enviando ? 0.7 : 1, boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.3)' }}>
+            <Save size={20}/> {enviando ? 'Enviando...' : 'Emitir Memorándum Oficial'}
           </button>
         </form>
         {mensaje.texto && <div style={{ marginTop: '20px', padding: '15px', borderRadius: '10px', backgroundColor: mensaje.tipo === 'error' ? '#fef2f2' : '#f0fdf4', color: mensaje.tipo === 'error' ? '#ef4444' : '#16a34a', fontWeight: '700', textAlign: 'center', fontSize: '14px', border: `1px solid ${mensaje.tipo === 'error' ? '#fecaca' : '#bbf7d0'}` }}>{mensaje.texto}</div>}
@@ -153,7 +174,13 @@ export default function Memos() {
                   </td>
                 </tr>
               ))}
-              {(!lista || lista.length === 0) && (
+              {cargandoLista && lista.length === 0 && (
+                <tr><td colSpan="4" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: '600' }}>Cargando historial...</td></tr>
+              )}
+              {!cargandoLista && errorLista && (
+                <tr><td colSpan="4" style={{ padding: '40px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
+              )}
+              {!cargandoLista && !errorLista && lista.length === 0 && (
                 <tr><td colSpan="4" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: '600' }}>No se han emitido memorándums.</td></tr>
               )}
             </tbody>
