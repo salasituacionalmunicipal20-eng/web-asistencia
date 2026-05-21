@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen } from 'lucide-react'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
+import { verificarAdmin } from './lib/auth'
 import ModalInactividad from './components/ModalInactividad'
 import PanelPrincipal from './vistas/PanelPrincipal'
 import Empleados from './vistas/Empleados'
@@ -23,23 +24,40 @@ function App() {
   const [cargandoLogin, setCargandoLogin] = useState(false)
   const [errorLogin, setErrorLogin] = useState('')
 
+  // Toda sesión que entre acá pasa por la puerta de admin. Si no está en la tabla
+  // `administradores`, hacemos signOut y mostramos por qué.
+  const validarSesionAdmin = useCallback(async (session) => {
+    if (!session) {
+      setSesionActiva(null)
+      return
+    }
+    const { admin, motivo } = await verificarAdmin(session.user.email)
+    if (admin) {
+      setSesionActiva(session)
+    } else {
+      // No autorizado: lo sacamos y dejamos el mensaje en la pantalla de login
+      await supabase.auth.signOut().catch(() => {})
+      setSesionActiva(null)
+      setErrorLogin(`⛔ ${motivo} Esta plataforma es solo para administradores.`)
+    }
+  }, [])
+
   // 1) Lee sesión inicial y se suscribe a cambios (token refresh, logout en otra pestaña, etc.)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSesionActiva(session)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      await validarSesionAdmin(session)
       setCargandoSesion(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSesionActiva(session)
+      validarSesionAdmin(session)
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [validarSesionAdmin])
 
   const cerrarSesion = useCallback(async () => {
     try {
       await supabase.auth.signOut()
     } catch (e) {
-      // Si falla la red, igual limpiamos el state local para sacar al usuario del panel
       console.error('Error al cerrar sesión:', e)
     } finally {
       setSesionActiva(null)
@@ -71,10 +89,14 @@ function App() {
 
     if (error) {
       setErrorLogin('⛔ Credenciales inválidas. Acceso denegado.')
-    } else {
-      setSesionActiva(data.session)
-      setPasswordInput('')
+      setCargandoLogin(false)
+      return
     }
+
+    // Las credenciales son correctas pero todavía falta verificar que sea admin.
+    // validarSesionAdmin escribe el mensaje en errorLogin si falla la verificación.
+    await validarSesionAdmin(data.session)
+    setPasswordInput('')
     setCargandoLogin(false)
   }
 
