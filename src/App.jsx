@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen } from 'lucide-react'
 import PanelPrincipal from './vistas/PanelPrincipal'
 import Empleados from './vistas/Empleados'
-// Nuevas Vistas Importadas
 import Justificaciones from './vistas/Justificaciones'
 import Memos from './vistas/Memos'
+import Reportes from './vistas/Reportes'
 
 function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
@@ -154,12 +154,14 @@ function App() {
           <div onClick={() => { setVistaActual('empleados'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'empleados' ? '#0284c7' : 'transparent', color: vistaActual === 'empleados' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <Users size={20} /> <span style={{ fontWeight: '500' }}>Gestión de Personal</span>
           </div>
-          {/* NUEVOS BOTONES AÑADIDOS */}
           <div onClick={() => { setVistaActual('justificaciones'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'justificaciones' ? '#0284c7' : 'transparent', color: vistaActual === 'justificaciones' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <ClipboardList size={20} /> <span style={{ fontWeight: '500' }}>Justificaciones</span>
           </div>
-          <div onClick={() => { setVistaActual('memos'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'memos' ? '#0284c7' : 'transparent', color: vistaActual === 'memos' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+          <div onClick={() => { setVistaActual('memos'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'memos' ? '#0284c7' : 'transparent', color: vistaActual === 'memos' ? 'white' : '#cbd5e1', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer' }}>
             <FileText size={20} /> <span style={{ fontWeight: '500' }}>Memorándums</span>
+          </div>
+          <div onClick={() => { setVistaActual('reportes'); setMenuAbiertoMobile(false); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: vistaActual === 'reportes' ? '#0284c7' : 'transparent', color: vistaActual === 'reportes' ? 'white' : '#cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
+            <BookOpen size={20} /> <span style={{ fontWeight: '500' }}>Expedientes y Reportes</span>
           </div>
         </div>
 
@@ -177,6 +179,7 @@ function App() {
         {vistaActual === 'empleados' && <Empleados />}
         {vistaActual === 'justificaciones' && <Justificaciones />}
         {vistaActual === 'memos' && <Memos />}
+        {vistaActual === 'reportes' && <Reportes />}
       </div>
     </div>
   )

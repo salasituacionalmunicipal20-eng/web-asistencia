@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { BookOpen, Download, Search, UserCheck, Calendar, Clock, AlertCircle } from 'lucide-react'
-import jsPDF from 'jsPDF'
-import 'jspdf-autotable'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function Reportes() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
@@ -82,12 +82,12 @@ export default function Reportes() {
       }
     })
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 38,
       head: [['Fecha', 'Tipo de Registro', 'Detalle de Operación']],
       body: tablaDatos,
       theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }, // Color Índigo moderno
+      headStyles: { fillColor: [79, 70, 229] },
       styles: { fontSize: 10 }
     })
 

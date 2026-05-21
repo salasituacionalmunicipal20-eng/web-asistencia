@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { MapPin, Users, Calendar as CalendarIcon, Clock, Download, CheckCircle } from 'lucide-react'
-import jsPDF from 'jsPDF'
-import 'jspdf-autotable'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default function PanelPrincipal() {
   const [registros, setRegistros] = useState([])
@@ -36,7 +36,7 @@ export default function PanelPrincipal() {
       registro.tipo_red || 'GPS'
     ])
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 38,
       head: [['Cédula', 'Fecha', 'Hora Entrada', 'Hora Salida', 'Método']],
       body: tablaDatos,
@@ -108,7 +108,7 @@ export default function PanelPrincipal() {
                     )}
                   </td>
                   <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                    <a href={`https://www.google.com/maps?q=$${registro.latitud},${registro.longitud}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#0284c7', borderRadius: '8px', textDecoration: 'none', fontWeight: '700', fontSize: '12px' }}><MapPin size={14} /> GPS</a>
+                    <a href={`https://www.google.com/maps?q=${registro.latitud},${registro.longitud}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#0284c7', borderRadius: '8px', textDecoration: 'none', fontWeight: '700', fontSize: '12px' }}><MapPin size={14} /> GPS</a>
                   </td>
                 </tr>
               ))}
