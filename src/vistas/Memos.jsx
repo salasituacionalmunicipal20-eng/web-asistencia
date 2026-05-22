@@ -84,7 +84,7 @@ export default function Memos() {
     }
   }
 
-  const estiloInput = { width: '100%', padding: '14px', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', backgroundColor: '#f8fafc' }
+  const estiloInput = { width: '100%', padding: '14px', boxSizing: 'border-box', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', backgroundColor: '#f8fafc', color: '#0f172a', fontWeight: 600 }
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>

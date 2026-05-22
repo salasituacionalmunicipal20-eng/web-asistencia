@@ -131,7 +131,7 @@ function App() {
                 onChange={(e) => setCorreoInput(e.target.value)}
                 required
                 autoComplete="email"
-                style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px' }}
+                style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', color: '#0f172a', backgroundColor: '#ffffff' }}
               />
             </div>
 
@@ -144,7 +144,7 @@ function App() {
                 onChange={(e) => setPasswordInput(e.target.value)}
                 required
                 autoComplete="current-password"
-                style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px' }}
+                style={{ width: '100%', padding: '12px', boxSizing: 'border-box', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px', color: '#0f172a', backgroundColor: '#ffffff' }}
               />
             </div>
 

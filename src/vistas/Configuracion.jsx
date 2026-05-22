@@ -246,7 +246,7 @@ function PanelFeriados() {
 // ============================================================================
 // Componentes/estilos compartidos
 // ============================================================================
-const inputStyle  = { width: '100%', padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, fontWeight: 600, backgroundColor: '#f8fafc', boxSizing: 'border-box' }
+const inputStyle  = { width: '100%', padding: 10, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, fontWeight: 600, backgroundColor: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' }
 const labelStyle  = { display: 'block', fontSize: 11, fontWeight: 800, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }
 const botonPrimario = { padding: '10px 16px', backgroundColor: '#0284c7', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'end' }
 const botonBorrar = { padding: 6, backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }
