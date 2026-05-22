@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
@@ -45,7 +45,54 @@ export default function Empleados() {
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
 
   const archivoCSVRef = useRef(null)
+  const archivoFotoRef = useRef(null)
   const [importandoCSV, setImportandoCSV] = useState(false)
+  const [empleadoFoto, setEmpleadoFoto] = useState(null)
+
+  // --------------------------------------------------------------------
+  // ACTIVAR/DESACTIVAR empleado (soft delete via toggle activo)
+  // --------------------------------------------------------------------
+  const toggleActivo = async (cedula, nuevoEstado) => {
+    const msg = nuevoEstado ? '¿Activar a este empleado? Volvera a poder marcar asistencia.' : '¿Desactivar a este empleado? No podra marcar asistencia hasta reactivarlo.'
+    if (!confirm(msg)) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.rpc('toggle_activo_empleado', {
+      p_cedula: cedula,
+      p_activo: nuevoEstado,
+      p_admin_email: user?.email || null
+    })
+    if (error) { alert(`Error: ${error.message}`); return }
+    obtenerEmpleados()
+  }
+
+  // --------------------------------------------------------------------
+  // SUBIR FOTO de perfil. Sube a Supabase Storage (bucket empleados-fotos)
+  // y guarda la URL publica en la columna empleados.foto_url.
+  // --------------------------------------------------------------------
+  const abrirSelectorFoto = (cedula) => {
+    setEmpleadoFoto(cedula)
+    archivoFotoRef.current?.click()
+  }
+
+  const manejarSubidaFoto = async (evento) => {
+    const archivo = evento.target.files?.[0]
+    if (!archivo || !empleadoFoto) return
+    try {
+      const ext = archivo.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${empleadoFoto}_${Date.now()}.${ext}`
+      const { error: errUp } = await supabase.storage.from('empleados-fotos').upload(path, archivo, { upsert: true, contentType: archivo.type })
+      if (errUp) throw errUp
+      const { data: { publicUrl } } = supabase.storage.from('empleados-fotos').getPublicUrl(path)
+      const { error: errUpd } = await supabase.from('empleados').update({ foto_url: publicUrl }).eq('cedula', empleadoFoto)
+      if (errUpd) throw errUpd
+      obtenerEmpleados()
+    } catch (e) {
+      alert(`No se pudo subir la foto: ${e.message}`)
+    } finally {
+      setEmpleadoFoto(null)
+      if (archivoFotoRef.current) archivoFotoRef.current.value = ''
+    }
+  }
 
   // --------------------------------------------------------------------
   // RESETEAR CLAVE de un empleado (usa RPC server-side que hashea con bcrypt
@@ -301,6 +348,7 @@ export default function Empleados() {
           <Upload size={18} /> {importandoCSV ? 'Importando...' : 'Importar CSV'}
         </button>
         <input ref={archivoCSVRef} type="file" accept=".csv,text/csv" onChange={manejarImportCSV} style={{ display: 'none' }} />
+        <input ref={archivoFotoRef} type="file" accept="image/*" onChange={manejarSubidaFoto} style={{ display: 'none' }} />
       </div>
 
       {/* FORMULARIO DE ACCIONES */}
@@ -428,9 +476,20 @@ export default function Empleados() {
             </thead>
             <tbody>
               {listaEmpleados?.map((emp) => (
-                <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px', transition: 'background 0.2s', backgroundColor: editandoId === emp.id ? '#ecfdf5' : 'transparent' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = editandoId === emp.id ? '#ecfdf5' : '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = editandoId === emp.id ? '#ecfdf5' : 'transparent'}>
+                <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px', backgroundColor: editandoId === emp.id ? '#ecfdf5' : (emp.activo === false ? '#fef2f2' : 'transparent'), opacity: emp.activo === false ? 0.6 : 1 }}>
                   <td style={{ padding: '15px 20px', fontWeight: '800', color: '#10b981' }}>{emp?.cedula}</td>
-                  <td style={{ padding: '15px 20px', color: '#1e293b', fontWeight: '700' }}>{emp?.nombres} {emp?.apellidos}</td>
+                  <td style={{ padding: '15px 20px', color: '#1e293b', fontWeight: '700' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {emp.foto_url ? (
+                        <img src={emp.foto_url} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '1px solid #cbd5e1' }} />
+                      ) : (
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12 }}>
+                          {(emp.nombres || '?').charAt(0)}{(emp.apellidos || '').charAt(0)}
+                        </div>
+                      )}
+                      <span>{emp?.nombres} {emp?.apellidos}{emp.activo === false ? ' (Inactivo)' : ''}</span>
+                    </div>
+                  </td>
                   <td style={{ padding: '15px 20px', color: '#64748b' }}>
                     <div style={{ fontWeight: '800', color: '#334155' }}>{emp?.departamento}</div>
                     <div style={{ fontSize: '12px', fontWeight: '600' }}>{emp?.cargo}</div>
@@ -440,13 +499,15 @@ export default function Empleados() {
                     <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', fontWeight: '600' }}> (+{emp?.tolerancia_minutos || 0}m gracia)</span>
                   </td>
                   <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                    <div style={{ display: 'inline-flex', gap: 6 }}>
-                      <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '800' }} title="Editar empleado">
-                        <Pencil size={14} /> Editar
-                      </button>
-                      <button onClick={() => resetearClave(emp.cedula)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '800' }} title="Resetear clave del empleado">
-                        <KeyRound size={14} /> Clave
-                      </button>
+                    <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button onClick={() => activarModoEdicion(emp)}    title="Editar"    style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Pencil size={12} /> Editar</button>
+                      <button onClick={() => abrirSelectorFoto(emp.cedula)} title="Subir foto" style={{ padding: '6px 10px', backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Camera size={12} /> Foto</button>
+                      <button onClick={() => resetearClave(emp.cedula)}   title="Resetear clave" style={{ padding: '6px 10px', backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><KeyRound size={12} /> Clave</button>
+                      {emp.activo !== false ? (
+                        <button onClick={() => toggleActivo(emp.cedula, false)} title="Desactivar" style={{ padding: '6px 10px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><PowerOff size={12} /></button>
+                      ) : (
+                        <button onClick={() => toggleActivo(emp.cedula, true)}  title="Activar"    style={{ padding: '6px 10px', backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Power size={12} /></button>
+                      )}
                     </div>
                   </td>
                 </tr>

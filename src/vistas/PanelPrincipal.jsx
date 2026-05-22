@@ -50,8 +50,21 @@ export default function PanelPrincipal() {
 
   useEffect(() => {
     cargarTodo()
-    const id = setInterval(cargarTodo, 60_000) // refresh cada 60s
-    return () => clearInterval(id)
+    // Realtime: nos suscribimos a cambios de asistencia_registros + alertas.
+    // Cada INSERT/UPDATE dispara una recarga ligera de KPIs/presencia (sin
+    // bloquear UI). El polling cada 60s queda como respaldo por si la conexion
+    // realtime se cae (network change, sleep, etc).
+    const canal = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencia_registros' }, () => cargarTodo())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => cargarTodo())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'justificaciones' }, () => cargarTodo())
+      .subscribe()
+    const id = setInterval(cargarTodo, 60_000)
+    return () => {
+      clearInterval(id)
+      supabase.removeChannel(canal)
+    }
   }, [cargarTodo])
 
   // --- Helpers ---------------------------------------------------------

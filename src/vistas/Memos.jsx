@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { Save, FileText, Search, UserCheck } from 'lucide-react'
+import { Save, FileText, Search, UserCheck, Trash2 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Memos() {
@@ -15,6 +15,19 @@ export default function Memos() {
 
   const [formulario, setFormulario] = useState({ empleado_id: '', titulo: '', descripcion: '' })
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
+  const [filtroBusqueda, setFiltroBusqueda] = useState('')
+
+  const borrarMemo = async (id) => {
+    if (!confirm('¿Eliminar este memorandum? La accion queda en auditoria.')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.rpc('eliminar_con_auditoria', {
+      p_tabla: 'memorandums',
+      p_id: id,
+      p_admin_email: user?.email || null
+    })
+    if (error) { alert(`Error: ${error.message}`); return }
+    obtenerMemos()
+  }
 
   // Cierra el dropdown del buscador cuando se hace click fuera de él
   const buscadorRef = useRef(null)
@@ -150,7 +163,14 @@ export default function Memos() {
       </div>
 
       <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafafa' }}><h3 style={{ margin: 0, color: '#1e293b', fontSize: '16px', fontWeight: '800', textTransform: 'uppercase' }}>Historial de Envíos</h3></div>
+        <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafafa', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: 10 }}>
+          <h3 style={{ margin: 0, color: '#1e293b', fontSize: '16px', fontWeight: '800', textTransform: 'uppercase' }}>Historial de Envíos</h3>
+          <div style={{ position: 'relative', minWidth: 220 }}>
+            <Search size={14} color="#64748b" style={{ position: 'absolute', left: 10, top: 10 }} />
+            <input type="text" value={filtroBusqueda} onChange={e => setFiltroBusqueda(e.target.value)} placeholder="Buscar por cédula o asunto..."
+              style={{ width: '100%', padding: '8px 8px 8px 32px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, color: '#0f172a', backgroundColor: '#f8fafc', fontWeight: 600, boxSizing: 'border-box' }} />
+          </div>
+        </div>
         <div style={{ width: '100%', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
             <thead>
@@ -159,10 +179,15 @@ export default function Memos() {
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Cédula Destino</th>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Asunto</th>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Estatus App</th>
+                <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>Accion</th>
               </tr>
             </thead>
             <tbody>
-              {lista?.map((item) => (
+              {lista?.filter(item => {
+                if (!filtroBusqueda) return true
+                const q = filtroBusqueda.toLowerCase()
+                return (item.empleado_id || '').toLowerCase().includes(q) || (item.titulo || '').toLowerCase().includes(q)
+              }).map((item) => (
                 <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
                   <td style={{ padding: '15px 20px', fontWeight: '600', color: '#64748b' }}>{String(item?.fecha_emision || '').substring(0,10)}</td>
                   <td style={{ padding: '15px 20px', fontWeight: '800', color: '#4f46e5' }}>{item?.empleado_id}</td>
@@ -171,6 +196,9 @@ export default function Memos() {
                     <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', backgroundColor: item?.leido ? '#dcfce7' : '#fee2e2', color: item?.leido ? '#16a34a' : '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       {item?.leido ? 'Visto ✔' : 'Sin Leer'}
                     </span>
+                  </td>
+                  <td style={{ padding: '15px 20px', textAlign: 'center' }}>
+                    <button onClick={() => borrarMemo(item.id)} title="Eliminar" style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: 6, borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><Trash2 size={12} /></button>
                   </td>
                 </tr>
               ))}

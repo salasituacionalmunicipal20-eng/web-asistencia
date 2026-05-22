@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane } from 'lucide-react'
+import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
 import { verificarAdmin } from './lib/auth'
@@ -11,8 +12,11 @@ import Justificaciones from './vistas/Justificaciones'
 import Memos from './vistas/Memos'
 import Reportes from './vistas/Reportes'
 import Configuracion from './vistas/Configuracion'
+import Vacaciones from './vistas/Vacaciones'
+import Auditoria from './vistas/Auditoria'
 
 function App() {
+  const { tema, toggle: toggleTema, t } = useTema()
   const [sesionActiva, setSesionActiva] = useState(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
   const [vistaActual, setVistaActual] = useState('dashboard')
@@ -172,12 +176,14 @@ function App() {
     { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
     { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
     { id: 'memos', icon: FileText, label: 'Memorándums' },
-    { id: 'reportes', icon: BookOpen, label: 'Expedientes y Reportes' },
+    { id: 'reportes', icon: BookOpen, label: 'Reportes' },
+    { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
+    { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
     { id: 'configuracion', icon: Settings, label: 'Configuracion' },
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', backgroundColor: t.bgApp, color: t.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
       {isMobile && (
         <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 1000 }}>
@@ -237,9 +243,13 @@ function App() {
         </div>
 
         <div style={{ padding: '20px', borderTop: '1px solid #1e293b' }}>
-          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0', textAlign: 'center', wordBreak: 'break-all' }}>Sesión: {sesionActiva.user.email}</p>
+          <button onClick={toggleTema} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: 10, backgroundColor: 'transparent', color: '#cbd5e1', border: '1px solid #334155', borderRadius: 8, cursor: 'pointer', fontWeight: 600, marginBottom: 10, fontSize: 13 }}>
+            {tema === 'oscuro' ? <Sun size={16} /> : <Moon size={16} />}
+            Modo {tema === 'oscuro' ? 'claro' : 'oscuro'}
+          </button>
+          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0', textAlign: 'center', wordBreak: 'break-all' }}>Sesion: {sesionActiva.user.email}</p>
           <button onClick={cerrarSesion} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-            <LogOut size={18} /> Cerrar Sesión
+            <LogOut size={18} /> Cerrar Sesion
           </button>
         </div>
       </div>
@@ -252,6 +262,8 @@ function App() {
         <div style={{ display: vistaActual === 'justificaciones' ? 'block' : 'none' }}><Justificaciones /></div>
         <div style={{ display: vistaActual === 'memos' ? 'block' : 'none' }}><Memos /></div>
         <div style={{ display: vistaActual === 'reportes' ? 'block' : 'none' }}><Reportes /></div>
+        <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
+        <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'configuracion' ? 'block' : 'none' }}><Configuracion /></div>
       </div>
 

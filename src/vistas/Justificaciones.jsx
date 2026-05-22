@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { CheckCircle, XCircle, ClipboardList, Camera } from 'lucide-react'
+import { CheckCircle, XCircle, ClipboardList, Camera, Trash2 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Justificaciones() {
@@ -26,18 +26,37 @@ export default function Justificaciones() {
   }, [obtenerDatos])
 
   const cambiarEstado = async (id, nuevoEstado) => {
-    // Usamos la RPC server-side que ademas registra la accion en la tabla auditoria.
+    // Pedimos un comentario al admin (opcional para aprobar, importante para
+    // rechazar). Se guarda como acuse de recibo y aparece en la app del empleado.
+    const promptMsg = nuevoEstado === 'Aprobado'
+      ? 'Aprobar justificacion. Comentario (opcional):'
+      : 'Rechazar justificacion. Indique el motivo del rechazo:'
+    const comentario = prompt(promptMsg, '')
+    if (comentario === null) return  // canceló
+
     const { data: { user } } = await supabase.auth.getUser()
     const { error: errRpc } = await supabase.rpc('aprobar_justificacion', {
       p_id: id,
       p_aprobar: nuevoEstado === 'Aprobado',
-      p_comentario: null,
+      p_comentario: comentario || null,
       p_admin_email: user?.email || null
     })
     if (errRpc) {
       alert(`No se pudo actualizar la justificacion: ${errRpc.message}`)
       return
     }
+    obtenerDatos()
+  }
+
+  const borrarJustificacion = async (id) => {
+    if (!confirm('¿Eliminar esta justificacion definitivamente? La accion queda en auditoria.')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.rpc('eliminar_con_auditoria', {
+      p_tabla: 'justificaciones',
+      p_id: id,
+      p_admin_email: user?.email || null
+    })
+    if (error) { alert(`Error: ${error.message}`); return }
     obtenerDatos()
   }
 
@@ -90,11 +109,14 @@ export default function Justificaciones() {
                   <td style={{ padding: '15px 20px', textAlign: 'center', display: 'flex', gap: '10px', justifyContent: 'center' }}>
                     {item?.estado === 'Pendiente' ? (
                       <>
-                        <button onClick={() => cambiarEstado(item.id, 'Aprobado')} style={{ backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: '0 2px 4px rgba(22,163,74,0.3)', transition: 'transform 0.1s' }} onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'} onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'} title="Aprobar"><CheckCircle size={18} /></button>
-                        <button onClick={() => cambiarEstado(item.id, 'Rechazado')} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', boxShadow: '0 2px 4px rgba(239,68,68,0.3)', transition: 'transform 0.1s' }} onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.9)'} onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'} title="Rechazar"><XCircle size={18} /></button>
+                        <button onClick={() => cambiarEstado(item.id, 'Aprobado')} style={{ backgroundColor: '#16a34a', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Aprobar"><CheckCircle size={18} /></button>
+                        <button onClick={() => cambiarEstado(item.id, 'Rechazado')} style={{ backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Rechazar"><XCircle size={18} /></button>
                       </>
                     ) : (
-                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700' }}>Procesado ✔</span>
+                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '700' }}>Procesado ✔</span>
+                        <button onClick={() => borrarJustificacion(item.id)} title="Eliminar" style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: 6, borderRadius: 6, cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}><Trash2 size={12} /></button>
+                      </div>
                     )}
                   </td>
                 </tr>
