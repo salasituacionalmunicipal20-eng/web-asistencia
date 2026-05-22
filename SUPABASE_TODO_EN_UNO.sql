@@ -1,0 +1,722 @@
+-- ============================================================================
+-- SUPABASE_TODO_EN_UNO.sql
+-- ============================================================================
+-- Setup unico. Pega este script COMPLETO en Supabase Studio -> SQL Editor ->
+-- New query -> Run. Es idempotente (puedes correrlo cuantas veces necesites).
+--
+-- Incluye TODO lo que el sistema necesita:
+--   1. habitantes (Alcaldia-admin)                              [SIN CAMBIOS]
+--   2. asistencia_registros                  [REESCRITA para app Android]
+--   3. administradores_web + admin inicial                      [SIN CAMBIOS]
+--   4. empleados + clave_hash + bcrypt backfill                 [AMPLIADA]
+--   5. justificaciones (con foto_url)                           [AMPLIADA]
+--   6. memorandums                                              [SIN CAMBIOS]
+--   7. oficinas/turnos/feriados/auditoria/alertas               [NUEVO]
+--   8. Vistas analiticas (vw_kpis_hoy, vw_presencia_actual, ...)[NUEVO]
+--   9. RPCs (verificar_clave, actualizar_clave, ...)            [NUEVO]
+--  10. RLS abierta + grants
+--
+-- IMPORTANTE: la tabla `asistencia_registros` se DROP+CREATE porque las
+-- columnas viejas (dispositivo_id, tipo_red, tipo_registro NOT NULL, hora
+-- como timestamptz) no coinciden con lo que envia la app Android. Si llegaras
+-- a tener filas reales ahi, EXPORTALAS antes (no es el caso ahora).
+-- ============================================================================
+
+
+-- ============================================================================
+-- 0. EXTENSIONES
+-- ============================================================================
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+
+-- ============================================================================
+-- 1. HABITANTES (Alcaldia-admin)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS habitantes (
+  id serial primary key,
+  id_firebase text UNIQUE,
+  jefe_hogar_id text,
+  ubch text,
+  codigo_sigue_actual text,
+  comuna text,
+  consejo_comunal text,
+  comunidad text,
+  calle text,
+  numero_casa text,
+  tipo_vivienda text,
+  tenencia_vivienda text,
+  condiciones_vivienda text,
+  responsabilidad_cbi_cm text,
+  tiene_gas text,
+  tipo_cilindro_gas text,
+  nombre text,
+  apellido text,
+  tiene_cedula text,
+  nacionalidad text,
+  cedula text,
+  telefono text,
+  fecha_nacimiento text,
+  sexo text,
+  parentesco text,
+  profesion text,
+  trabaja text,
+  esta_escolarizado text,
+  esta_cedulado text,
+  padece_enfermedad text,
+  toma_medicamento text,
+  cual_medicamento text,
+  discapacitado text,
+  tipo_discapacidad text,
+  embarazada text,
+  lactancia_materna text,
+  cobra_amor_mayor text,
+  carnet_patria text,
+  mision_jose_gregorio text,
+  hogares_patria_bono text,
+  donde_vota text,
+  vd_vb_vo_seleccion text,
+  vd_vb_vo_detalle text,
+  registrado_por_uid text,
+  registrado_por_nombre text,
+  fecha_registro text
+);
+
+ALTER TABLE habitantes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Todo_Admin" ON habitantes;
+CREATE POLICY "Permitir_Todo_Admin"
+ON habitantes
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+
+-- ============================================================================
+-- 2. ASISTENCIA_REGISTROS (REESCRITA para alinearse con la app Android)
+-- ============================================================================
+DROP TABLE IF EXISTS asistencia_registros CASCADE;
+
+CREATE TABLE asistencia_registros (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empleado_id   text NOT NULL,
+  latitud       double precision NOT NULL,
+  longitud      double precision NOT NULL,
+  fecha         date NOT NULL,
+  hora_entrada  text,                          -- formato "HH:mm:ss"
+  hora_salida   text,                          -- null hasta marcar salida
+  device_id     text,
+  network_type  text,
+  created_at    timestamp with time zone DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_asistencia_empleado_fecha
+  ON asistencia_registros (empleado_id, fecha DESC);
+
+ALTER TABLE asistencia_registros ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Todo_Asistencia" ON asistencia_registros;
+DROP POLICY IF EXISTS "Permitir_Actualizar_Asistencia" ON asistencia_registros;
+
+CREATE POLICY "Permitir_Todo_Asistencia"
+ON asistencia_registros
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+
+-- ============================================================================
+-- 3. ADMINISTRADORES WEB
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS administradores_web (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  correo text UNIQUE NOT NULL,
+  nombre text NOT NULL,
+  activo boolean DEFAULT true,
+  fecha_creacion timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE administradores_web ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Lectura_Admins" ON administradores_web;
+CREATE POLICY "Permitir_Lectura_Admins"
+ON administradores_web
+FOR SELECT
+USING (true);
+
+
+-- ============================================================================
+-- 4. PRIMER ADMINISTRADOR
+-- ============================================================================
+INSERT INTO administradores_web (correo, nombre, activo)
+VALUES ('carlos.linares.es@gmail.com', 'Carlos Linares', true)
+ON CONFLICT (correo) DO UPDATE SET activo = EXCLUDED.activo;
+
+
+-- ============================================================================
+-- 5. EMPLEADOS + MIGRACION AUTH A BCRYPT
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS empleados (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  cedula text UNIQUE NOT NULL,
+  nombres text NOT NULL,
+  apellidos text NOT NULL,
+  departamento text NOT NULL,
+  cargo text NOT NULL,
+  hora_entrada time NOT NULL,
+  hora_salida time NOT NULL,
+  tolerancia_minutos integer DEFAULT 15,
+  activo boolean DEFAULT true,
+  fecha_registro timestamp with time zone DEFAULT now(),
+  clave text DEFAULT '123456',
+  requiere_cambio_clave boolean DEFAULT true
+);
+
+-- Agrega columna clave_hash (idempotente)
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS clave_hash text;
+
+-- Backfill: hashea con bcrypt todas las claves cleartext que aun no tengan hash
+UPDATE empleados
+SET clave_hash = crypt(clave, gen_salt('bf', 10))
+WHERE clave_hash IS NULL AND clave IS NOT NULL;
+
+ALTER TABLE empleados ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Todo_Empleados" ON empleados;
+CREATE POLICY "Permitir_Todo_Empleados"
+ON empleados
+FOR ALL
+USING (true)
+WITH CHECK (true);
+
+
+-- ============================================================================
+-- 6. JUSTIFICACIONES (con foto_url)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS justificaciones (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  empleado_id text NOT NULL,
+  fecha_falta date NOT NULL,
+  motivo text NOT NULL,
+  foto_url text,
+  estado text DEFAULT 'Pendiente',
+  fecha_solicitud timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE justificaciones ADD COLUMN IF NOT EXISTS foto_url text;
+
+ALTER TABLE justificaciones ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Todo_Justificaciones" ON justificaciones;
+CREATE POLICY "Permitir_Todo_Justificaciones"
+ON justificaciones FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ============================================================================
+-- 7. MEMORANDUMS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS memorandums (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  empleado_id text NOT NULL,
+  titulo text NOT NULL,
+  descripcion text NOT NULL,
+  fecha_emision date DEFAULT CURRENT_DATE,
+  leido boolean DEFAULT false
+);
+
+ALTER TABLE memorandums ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir_Todo_Memorandums" ON memorandums;
+CREATE POLICY "Permitir_Todo_Memorandums"
+ON memorandums FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ============================================================================
+-- 8. OFICINAS (multi-sede con geofence)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS oficinas (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre        text NOT NULL,
+  direccion     text,
+  latitud       double precision NOT NULL,
+  longitud      double precision NOT NULL,
+  radio_metros  integer NOT NULL DEFAULT 50,
+  activa        boolean NOT NULL DEFAULT true,
+  creada_en     timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE oficinas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_Oficinas" ON oficinas;
+CREATE POLICY "Permitir_Todo_Oficinas" ON oficinas
+  FOR ALL USING (true) WITH CHECK (true);
+
+INSERT INTO oficinas (nombre, direccion, latitud, longitud, radio_metros)
+SELECT 'Charallave Central', 'Sede principal', 10.232380, -66.859302, 50
+WHERE NOT EXISTS (SELECT 1 FROM oficinas WHERE nombre = 'Charallave Central');
+
+INSERT INTO oficinas (nombre, direccion, latitud, longitud, radio_metros)
+SELECT 'Sede Alterna', 'Sede secundaria', 10.222828, -66.857475, 50
+WHERE NOT EXISTS (SELECT 1 FROM oficinas WHERE nombre = 'Sede Alterna');
+
+
+-- ============================================================================
+-- 9. TURNOS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS turnos (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre              text NOT NULL UNIQUE,
+  hora_entrada        time NOT NULL,
+  hora_salida         time NOT NULL,
+  tolerancia_minutos  integer NOT NULL DEFAULT 15,
+  dias_semana         integer[] NOT NULL DEFAULT ARRAY[1,2,3,4,5]::integer[],
+  activo              boolean NOT NULL DEFAULT true,
+  creado_en           timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_Turnos" ON turnos;
+CREATE POLICY "Permitir_Todo_Turnos" ON turnos
+  FOR ALL USING (true) WITH CHECK (true);
+
+INSERT INTO turnos (nombre, hora_entrada, hora_salida, tolerancia_minutos)
+SELECT 'Estandar', '08:00:00', '17:00:00', 15
+WHERE NOT EXISTS (SELECT 1 FROM turnos);
+
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS turno_id uuid REFERENCES turnos(id) ON DELETE SET NULL;
+
+
+-- ============================================================================
+-- 10. FERIADOS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS feriados (
+  fecha       date PRIMARY KEY,
+  descripcion text NOT NULL,
+  tipo        text NOT NULL DEFAULT 'NACIONAL',
+  creado_en   timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE feriados ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_Feriados" ON feriados;
+CREATE POLICY "Permitir_Todo_Feriados" ON feriados
+  FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ============================================================================
+-- 11. AUDITORIA
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS auditoria (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tabla          text NOT NULL,
+  registro_id    text,
+  accion         text NOT NULL,
+  campo          text,
+  valor_anterior text,
+  valor_nuevo    text,
+  usuario_email  text,
+  ip             text,
+  ocurrido_en    timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE auditoria ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_Auditoria" ON auditoria;
+CREATE POLICY "Permitir_Todo_Auditoria" ON auditoria
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_auditoria_tabla_fecha ON auditoria (tabla, ocurrido_en DESC);
+
+
+-- ============================================================================
+-- 12. ALERTAS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS alertas (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empleado_id  text NOT NULL,
+  tipo         text NOT NULL,
+  severidad    text NOT NULL DEFAULT 'media',
+  mensaje      text NOT NULL,
+  leida        boolean NOT NULL DEFAULT false,
+  resuelta     boolean NOT NULL DEFAULT false,
+  creada_en    timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE alertas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_Alertas" ON alertas;
+CREATE POLICY "Permitir_Todo_Alertas" ON alertas
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_no_resueltas ON alertas (resuelta, creada_en DESC) WHERE resuelta = false;
+
+
+-- ============================================================================
+-- 13. VISTAS ANALITICAS
+-- ============================================================================
+
+CREATE OR REPLACE VIEW vw_presencia_actual AS
+SELECT
+  ar.empleado_id,
+  e.nombres,
+  e.apellidos,
+  e.departamento,
+  e.cargo,
+  ar.fecha,
+  ar.hora_entrada,
+  ar.latitud,
+  ar.longitud,
+  ar.created_at
+FROM asistencia_registros ar
+LEFT JOIN empleados e ON e.cedula = ar.empleado_id
+WHERE ar.fecha = CURRENT_DATE
+  AND ar.hora_salida IS NULL
+ORDER BY ar.created_at DESC;
+
+GRANT SELECT ON vw_presencia_actual TO anon, authenticated;
+
+
+CREATE OR REPLACE VIEW vw_kpis_hoy AS
+SELECT
+  (SELECT count(*) FROM empleados WHERE COALESCE(activo, true)) AS total_empleados,
+  (SELECT count(DISTINCT empleado_id) FROM asistencia_registros WHERE fecha = CURRENT_DATE) AS marcaron_entrada,
+  (SELECT count(*) FROM vw_presencia_actual) AS dentro_ahora,
+  (SELECT count(*) FROM asistencia_registros WHERE fecha = CURRENT_DATE AND hora_salida IS NOT NULL) AS jornada_finalizada,
+  (SELECT count(*) FROM justificaciones WHERE estado = 'Pendiente') AS justificaciones_pendientes,
+  (SELECT count(*) FROM alertas WHERE resuelta = false) AS alertas_abiertas;
+
+GRANT SELECT ON vw_kpis_hoy TO anon, authenticated;
+
+
+CREATE OR REPLACE VIEW vw_ranking_puntualidad AS
+WITH base AS (
+  SELECT
+    ar.empleado_id,
+    e.nombres,
+    e.apellidos,
+    e.departamento,
+    COALESCE(t.hora_entrada, e.hora_entrada) AS hora_programada,
+    COALESCE(t.tolerancia_minutos, e.tolerancia_minutos, 15) AS tol_min,
+    ar.fecha,
+    ar.hora_entrada::time AS marcado
+  FROM asistencia_registros ar
+  LEFT JOIN empleados e ON e.cedula = ar.empleado_id
+  LEFT JOIN turnos t   ON t.id = e.turno_id
+  WHERE ar.fecha >= CURRENT_DATE - INTERVAL '30 days'
+    AND ar.hora_entrada IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM feriados f WHERE f.fecha = ar.fecha)
+)
+SELECT
+  empleado_id,
+  nombres,
+  apellidos,
+  departamento,
+  count(*) AS dias_marcados,
+  count(*) FILTER (
+    WHERE marcado > (hora_programada + (tol_min || ' minutes')::interval)::time
+  ) AS dias_tarde,
+  COALESCE(SUM(
+    GREATEST(0, EXTRACT(EPOCH FROM (marcado - hora_programada))/60 - tol_min)
+  )::integer, 0) AS minutos_tarde_total
+FROM base
+GROUP BY empleado_id, nombres, apellidos, departamento
+ORDER BY minutos_tarde_total ASC, dias_marcados DESC;
+
+GRANT SELECT ON vw_ranking_puntualidad TO anon, authenticated;
+
+
+CREATE OR REPLACE VIEW vw_estadisticas_empleado AS
+WITH base AS (
+  SELECT
+    ar.empleado_id,
+    date_trunc('month', ar.fecha)::date AS mes,
+    ar.fecha,
+    ar.hora_entrada::time AS marcado,
+    ar.hora_salida IS NOT NULL AS marco_salida,
+    COALESCE(t.hora_entrada, e.hora_entrada) AS hora_programada,
+    COALESCE(t.tolerancia_minutos, e.tolerancia_minutos, 15) AS tol_min
+  FROM asistencia_registros ar
+  LEFT JOIN empleados e ON e.cedula = ar.empleado_id
+  LEFT JOIN turnos t   ON t.id = e.turno_id
+)
+SELECT
+  empleado_id,
+  mes,
+  count(*) AS dias_asistidos,
+  count(*) FILTER (
+    WHERE marcado > (hora_programada + (tol_min || ' minutes')::interval)::time
+  ) AS dias_tarde,
+  count(*) FILTER (WHERE NOT marco_salida) AS dias_sin_salida_marcada,
+  ROUND(
+    AVG(EXTRACT(EPOCH FROM (marcado - hora_programada))/60)::numeric,
+    1
+  ) AS promedio_minutos_diferencia
+FROM base
+GROUP BY empleado_id, mes;
+
+GRANT SELECT ON vw_estadisticas_empleado TO anon, authenticated;
+
+
+-- ============================================================================
+-- 14. RPCs
+-- ============================================================================
+
+-- 14.a verificar_clave: login server-side de empleados (bcrypt + fallback cleartext)
+CREATE OR REPLACE FUNCTION public.verificar_clave(p_cedula text, p_clave text)
+RETURNS TABLE (
+  cedula                 text,
+  nombres                text,
+  apellidos              text,
+  departamento           text,
+  cargo                  text,
+  hora_entrada           text,
+  hora_salida            text,
+  tolerancia_minutos     int,
+  requiere_cambio_clave  boolean
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+    SELECT
+      e.cedula,
+      e.nombres,
+      e.apellidos,
+      e.departamento,
+      e.cargo,
+      e.hora_entrada::text,
+      e.hora_salida::text,
+      e.tolerancia_minutos,
+      e.requiere_cambio_clave
+    FROM public.empleados e
+    WHERE e.cedula = upper(trim(p_cedula))
+      AND COALESCE(e.activo, true) = true
+      AND (
+        (e.clave_hash IS NOT NULL AND e.clave_hash = crypt(p_clave, e.clave_hash))
+        OR
+        (e.clave_hash IS NULL AND e.clave = p_clave)
+      );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.verificar_clave(text, text) TO anon, authenticated;
+
+
+-- 14.b actualizar_clave: cambio de clave del propio empleado
+CREATE OR REPLACE FUNCTION public.actualizar_clave(p_cedula text, p_clave_nueva text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_actualizadas int;
+BEGIN
+  IF p_clave_nueva IS NULL OR length(p_clave_nueva) < 4 THEN
+    RAISE EXCEPTION 'La clave debe tener al menos 4 caracteres';
+  END IF;
+
+  UPDATE public.empleados
+  SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
+      clave = NULL,
+      requiere_cambio_clave = false
+  WHERE cedula = upper(trim(p_cedula));
+
+  GET DIAGNOSTICS v_actualizadas = ROW_COUNT;
+  RETURN v_actualizadas = 1;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.actualizar_clave(text, text) TO anon, authenticated;
+
+
+-- 14.c aprobar_justificacion: admin aprueba/rechaza con auditoria
+CREATE OR REPLACE FUNCTION public.aprobar_justificacion(
+  p_id uuid,
+  p_aprobar boolean,
+  p_comentario text DEFAULT NULL,
+  p_admin_email text DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_actualizadas int;
+BEGIN
+  UPDATE justificaciones
+  SET estado = CASE WHEN p_aprobar THEN 'Aprobado' ELSE 'Rechazado' END
+  WHERE id = p_id;
+
+  GET DIAGNOSTICS v_actualizadas = ROW_COUNT;
+
+  INSERT INTO auditoria (tabla, registro_id, accion, valor_nuevo, usuario_email)
+  VALUES (
+    'justificaciones',
+    p_id::text,
+    CASE WHEN p_aprobar THEN 'APROBAR' ELSE 'RECHAZAR' END,
+    p_comentario,
+    p_admin_email
+  );
+
+  RETURN v_actualizadas = 1;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) TO anon, authenticated;
+
+
+-- 14.d resetear_clave_empleado: admin resetea la clave de un empleado
+CREATE OR REPLACE FUNCTION public.resetear_clave_empleado(
+  p_cedula text,
+  p_clave_nueva text,
+  p_admin_email text DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_actualizadas int;
+BEGIN
+  IF p_clave_nueva IS NULL OR length(p_clave_nueva) < 4 THEN
+    RAISE EXCEPTION 'La clave debe tener al menos 4 caracteres';
+  END IF;
+
+  UPDATE empleados
+  SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
+      clave = NULL,
+      requiere_cambio_clave = true
+  WHERE cedula = upper(trim(p_cedula));
+
+  GET DIAGNOSTICS v_actualizadas = ROW_COUNT;
+
+  INSERT INTO auditoria (tabla, registro_id, accion, usuario_email)
+  VALUES ('empleados', p_cedula, 'RESET_CLAVE', p_admin_email);
+
+  RETURN v_actualizadas = 1;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) TO anon, authenticated;
+
+
+-- 14.e importar_empleado: bulk upsert (usado por el boton Importar CSV)
+CREATE OR REPLACE FUNCTION public.importar_empleado(
+  p_cedula text,
+  p_nombres text,
+  p_apellidos text,
+  p_departamento text,
+  p_cargo text,
+  p_hora_entrada time,
+  p_hora_salida time,
+  p_tolerancia_minutos int DEFAULT 15,
+  p_clave_inicial text DEFAULT '123456'
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_existe boolean;
+  v_ced text := upper(trim(p_cedula));
+BEGIN
+  SELECT EXISTS(SELECT 1 FROM empleados WHERE cedula = v_ced) INTO v_existe;
+
+  IF v_existe THEN
+    UPDATE empleados
+    SET nombres = p_nombres,
+        apellidos = p_apellidos,
+        departamento = p_departamento,
+        cargo = p_cargo,
+        hora_entrada = p_hora_entrada,
+        hora_salida = p_hora_salida,
+        tolerancia_minutos = COALESCE(p_tolerancia_minutos, 15)
+    WHERE cedula = v_ced;
+    RETURN 'ACTUALIZADO';
+  ELSE
+    INSERT INTO empleados (cedula, nombres, apellidos, departamento, cargo,
+                           hora_entrada, hora_salida, tolerancia_minutos,
+                           clave_hash, requiere_cambio_clave)
+    VALUES (v_ced, p_nombres, p_apellidos, p_departamento, p_cargo,
+            p_hora_entrada, p_hora_salida, COALESCE(p_tolerancia_minutos, 15),
+            crypt(p_clave_inicial, gen_salt('bf', 10)), true);
+    RETURN 'CREADO';
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.importar_empleado(text, text, text, text, text, time, time, int, text) TO anon, authenticated;
+
+
+-- 14.f recalcular_alertas: genera alertas de TARDE / SIN_SALIDA
+CREATE OR REPLACE FUNCTION public.recalcular_alertas()
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_total int := 0;
+BEGIN
+  INSERT INTO alertas (empleado_id, tipo, severidad, mensaje)
+  SELECT ar.empleado_id, 'SIN_SALIDA', 'media',
+         'No marco salida del ' || ar.fecha::text
+  FROM asistencia_registros ar
+  WHERE ar.hora_salida IS NULL
+    AND ar.fecha < CURRENT_DATE
+    AND NOT EXISTS (
+      SELECT 1 FROM alertas a
+      WHERE a.empleado_id = ar.empleado_id
+        AND a.tipo = 'SIN_SALIDA'
+        AND a.creada_en::date = ar.fecha
+    );
+  GET DIAGNOSTICS v_total = ROW_COUNT;
+
+  INSERT INTO alertas (empleado_id, tipo, severidad, mensaje)
+  SELECT ar.empleado_id, 'TARDE', 'baja',
+         'Marco entrada tarde el ' || ar.fecha::text
+  FROM asistencia_registros ar
+  JOIN empleados e ON e.cedula = ar.empleado_id
+  WHERE ar.fecha = CURRENT_DATE
+    AND ar.hora_entrada IS NOT NULL
+    AND ar.hora_entrada::time > (e.hora_entrada + (COALESCE(e.tolerancia_minutos, 15) || ' minutes')::interval)::time
+    AND NOT EXISTS (
+      SELECT 1 FROM alertas a
+      WHERE a.empleado_id = ar.empleado_id
+        AND a.tipo = 'TARDE'
+        AND a.creada_en::date = CURRENT_DATE
+    );
+
+  RETURN v_total;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.recalcular_alertas() TO anon, authenticated;
+
+
+-- ============================================================================
+-- 15. GRANTS finales
+-- ============================================================================
+GRANT ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO postgres, anon, authenticated, service_role;
+
+
+-- ============================================================================
+-- 16. VERIFICACION (debe devolver todo en true / con valores)
+-- ============================================================================
+SELECT
+  (SELECT count(*)::int FROM empleados)             AS empleados,
+  (SELECT count(*)::int FROM oficinas)              AS oficinas,
+  (SELECT count(*)::int FROM turnos)                AS turnos,
+  (SELECT count(*)::int FROM administradores_web)   AS admins,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='verificar_clave')        AS rpc_verificar_clave,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_clave')       AS rpc_actualizar_clave,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='aprobar_justificacion')  AS rpc_aprobar_justif,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='resetear_clave_empleado') AS rpc_resetear,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='importar_empleado')      AS rpc_importar,
+  EXISTS(SELECT 1 FROM pg_proc WHERE proname='recalcular_alertas')     AS rpc_alertas,
+  EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy')          AS vw_kpis,
+  EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_presencia_actual')  AS vw_presencia;
