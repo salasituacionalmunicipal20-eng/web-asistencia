@@ -54,12 +54,20 @@ export default function Reportes() {
     return indice
   }, [asistencias, justificaciones])
 
+  // Formatea "HH:mm:ss" -> "HH:mm". La columna hora_entrada/hora_salida ahora
+  // es TEXT en Supabase (no timestamptz), por eso parseamos con substring.
+  const formatearHoraTexto = (h) => {
+    if (!h) return 'Sin Marcar'
+    const s = String(h)
+    return s.length >= 5 ? s.substring(0, 5) : s
+  }
+
   const obtenerHistorialCombinado = useCallback((cedula) => {
     const datos = indicePorCedula.get(cedula) || { asis: [], just: [] }
     const asis = datos.asis.map(a => ({
       tipo: 'Asistencia',
       fecha: a.fecha,
-      detalle: `Entrada: ${new Date(a.hora_entrada).toLocaleTimeString('es-VE', {hour: '2-digit', minute:'2-digit'})} | Salida: ${a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString('es-VE', {hour: '2-digit', minute:'2-digit'}) : 'Sin Marcar'}`
+      detalle: `Entrada: ${formatearHoraTexto(a.hora_entrada)} | Salida: ${formatearHoraTexto(a.hora_salida)}`
     }))
     const just = datos.just.map(j => ({
       tipo: 'Justificación',

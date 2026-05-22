@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings } from 'lucide-react'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
 import { verificarAdmin } from './lib/auth'
@@ -10,6 +10,7 @@ import Empleados from './vistas/Empleados'
 import Justificaciones from './vistas/Justificaciones'
 import Memos from './vistas/Memos'
 import Reportes from './vistas/Reportes'
+import Configuracion from './vistas/Configuracion'
 
 function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
@@ -172,6 +173,7 @@ function App() {
     { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
     { id: 'memos', icon: FileText, label: 'Memorándums' },
     { id: 'reportes', icon: BookOpen, label: 'Expedientes y Reportes' },
+    { id: 'configuracion', icon: Settings, label: 'Configuracion' },
   ]
 
   return (
@@ -250,6 +252,7 @@ function App() {
         <div style={{ display: vistaActual === 'justificaciones' ? 'block' : 'none' }}><Justificaciones /></div>
         <div style={{ display: vistaActual === 'memos' ? 'block' : 'none' }}><Memos /></div>
         <div style={{ display: vistaActual === 'reportes' ? 'block' : 'none' }}><Reportes /></div>
+        <div style={{ display: vistaActual === 'configuracion' ? 'block' : 'none' }}><Configuracion /></div>
       </div>
 
       <ModalInactividad segundos={segundosRestantes} onContinuar={reiniciarInactividad} />

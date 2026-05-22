@@ -26,9 +26,16 @@ export default function Justificaciones() {
   }, [obtenerDatos])
 
   const cambiarEstado = async (id, nuevoEstado) => {
-    const { error: errUpd } = await supabase.from('justificaciones').update({ estado: nuevoEstado }).eq('id', id)
-    if (errUpd) {
-      alert(`No se pudo actualizar la justificación: ${errUpd.message}`)
+    // Usamos la RPC server-side que ademas registra la accion en la tabla auditoria.
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: errRpc } = await supabase.rpc('aprobar_justificacion', {
+      p_id: id,
+      p_aprobar: nuevoEstado === 'Aprobado',
+      p_comentario: null,
+      p_admin_email: user?.email || null
+    })
+    if (errRpc) {
+      alert(`No se pudo actualizar la justificacion: ${errRpc.message}`)
       return
     }
     obtenerDatos()

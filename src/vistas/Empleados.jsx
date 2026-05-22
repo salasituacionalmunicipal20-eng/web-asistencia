@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X, Users } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
@@ -43,6 +43,96 @@ export default function Empleados() {
   const [salPeriodo, setSalPeriodo] = useState('PM')
 
   const [mensaje, setMensaje] = useState({ texto: '', tipo: '' })
+
+  const archivoCSVRef = useRef(null)
+  const [importandoCSV, setImportandoCSV] = useState(false)
+
+  // --------------------------------------------------------------------
+  // RESETEAR CLAVE de un empleado (usa RPC server-side que hashea con bcrypt
+  // y queda registrado en la tabla auditoria con el correo del admin).
+  // --------------------------------------------------------------------
+  const resetearClave = async (cedula) => {
+    const claveNueva = prompt(`Nueva clave temporal para ${cedula}\n(El empleado debera cambiarla en su proximo login)`, '123456')
+    if (!claveNueva) return
+    if (claveNueva.length < 4) {
+      alert('La clave debe tener al menos 4 caracteres')
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.rpc('resetear_clave_empleado', {
+      p_cedula: cedula,
+      p_clave_nueva: claveNueva,
+      p_admin_email: user?.email || null
+    })
+    if (error) {
+      alert(`No se pudo resetear: ${error.message}`)
+      return
+    }
+    if (data === true) {
+      alert(`Clave de ${cedula} actualizada. Comunicale al empleado la nueva clave: ${claveNueva}`)
+    } else {
+      alert('No se encontro el empleado con esa cedula')
+    }
+  }
+
+  // --------------------------------------------------------------------
+  // IMPORTAR CSV. Formato esperado (con header):
+  //   cedula,nombres,apellidos,departamento,cargo,hora_entrada,hora_salida,tolerancia_minutos
+  // Las filas se procesan con la RPC importar_empleado (upsert por cedula).
+  // --------------------------------------------------------------------
+  const parsearCSV = (texto) => {
+    // Parser minimo: una linea por registro, comas como separador. NO maneja
+    // comillas escapadas porque para nuestro caso (datos planos) no aplica.
+    const lineas = texto.split(/\r?\n/).filter(l => l.trim().length > 0)
+    if (lineas.length < 2) return []
+    const headers = lineas[0].split(',').map(h => h.trim().toLowerCase())
+    return lineas.slice(1).map(linea => {
+      const cols = linea.split(',').map(c => c.trim())
+      const obj = {}
+      headers.forEach((h, i) => { obj[h] = cols[i] ?? '' })
+      return obj
+    })
+  }
+
+  const manejarImportCSV = async (evento) => {
+    const archivo = evento.target.files?.[0]
+    if (!archivo) return
+    setImportandoCSV(true)
+    try {
+      const texto = await archivo.text()
+      const filas = parsearCSV(texto)
+      if (filas.length === 0) {
+        alert('El CSV esta vacio o no tiene formato valido')
+        return
+      }
+      let creados = 0
+      let actualizados = 0
+      let errores = 0
+      for (const fila of filas) {
+        const { data, error } = await supabase.rpc('importar_empleado', {
+          p_cedula: fila.cedula,
+          p_nombres: fila.nombres,
+          p_apellidos: fila.apellidos,
+          p_departamento: fila.departamento || 'Sin asignar',
+          p_cargo: fila.cargo || 'Sin asignar',
+          p_hora_entrada: fila.hora_entrada || '08:00:00',
+          p_hora_salida: fila.hora_salida || '17:00:00',
+          p_tolerancia_minutos: Number(fila.tolerancia_minutos) || 15,
+          p_clave_inicial: '123456'
+        })
+        if (error) { errores++; continue }
+        if (data === 'CREADO') creados++
+        else if (data === 'ACTUALIZADO') actualizados++
+      }
+      alert(`Importacion finalizada:\n  Creados: ${creados}\n  Actualizados: ${actualizados}\n  Errores: ${errores}`)
+      obtenerEmpleados()
+    } catch (e) {
+      alert(`Error al procesar CSV: ${e.message}`)
+    } finally {
+      setImportandoCSV(false)
+      if (archivoCSVRef.current) archivoCSVRef.current.value = ''
+    }
+  }
 
   // ==========================================
   // FUNCIÓN RESTAURADA: Manejador de eventos de teclado
@@ -199,9 +289,18 @@ export default function Empleados() {
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
       
       {/* HEADER MODERNO */}
-      <div style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '25px', borderRadius: '16px', color: 'white', boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.4)' }}>
-        <h1 style={{ margin: '0 0 5px 0', fontSize: isMobile ? '24px' : '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}><Users size={32}/> Gestión de Talento Humano</h1>
-        <p style={{ margin: 0, fontSize: '15px', opacity: 0.9 }}>Alta, modificación y auditoría interna de credenciales de la Alcaldía.</p>
+      <div style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '25px', borderRadius: '16px', color: 'white', boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.4)', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', gap: 15 }}>
+        <div>
+          <h1 style={{ margin: '0 0 5px 0', fontSize: isMobile ? '24px' : '28px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px' }}><Users size={32}/> Gestión de Talento Humano</h1>
+          <p style={{ margin: 0, fontSize: '15px', opacity: 0.9 }}>Alta, modificación y auditoría interna de credenciales de la Alcaldía.</p>
+        </div>
+        <button
+          onClick={() => archivoCSVRef.current?.click()}
+          disabled={importandoCSV}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 18px', backgroundColor: 'white', color: '#059669', border: 'none', borderRadius: 10, cursor: importandoCSV ? 'wait' : 'pointer', fontWeight: 900, opacity: importandoCSV ? 0.7 : 1, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          <Upload size={18} /> {importandoCSV ? 'Importando...' : 'Importar CSV'}
+        </button>
+        <input ref={archivoCSVRef} type="file" accept=".csv,text/csv" onChange={manejarImportCSV} style={{ display: 'none' }} />
       </div>
 
       {/* FORMULARIO DE ACCIONES */}
@@ -341,9 +440,14 @@ export default function Empleados() {
                     <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', fontWeight: '600' }}> (+{emp?.tolerancia_minutos || 0}m gracia)</span>
                   </td>
                   <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                    <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '800', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1e293b'; e.currentTarget.style.color = 'white' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a' }}>
-                      <Pencil size={14} /> Editar
-                    </button>
+                    <div style={{ display: 'inline-flex', gap: 6 }}>
+                      <button onClick={() => activarModoEdicion(emp)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '800' }} title="Editar empleado">
+                        <Pencil size={14} /> Editar
+                      </button>
+                      <button onClick={() => resetearClave(emp.cedula)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 12px', backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '800' }} title="Resetear clave del empleado">
+                        <KeyRound size={14} /> Clave
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
