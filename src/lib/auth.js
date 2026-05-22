@@ -1,15 +1,15 @@
 import { supabase } from '../supabase'
 
-// Verifica si el email tiene permiso de administrador consultando la tabla `administradores`.
-// La tabla debe existir en Supabase (ver SUPABASE_SETUP.sql) con `email` como primary key.
+// Verifica si el email tiene permiso de administrador consultando la tabla
+// `administradores_web` (tabla con columnas: correo, nombre, activo).
 // Devuelve { admin: true, nombre? } si está autorizado, o { admin: false, motivo } si no.
 export async function verificarAdmin(email) {
-  if (!email) return { admin: false, motivo: 'Sin email en la sesión.' }
+  if (!email) return { admin: false, motivo: 'Sin email en la sesion.' }
 
   const { data, error } = await supabase
-    .from('administradores')
-    .select('email, nombre')
-    .eq('email', email)
+    .from('administradores_web')
+    .select('correo, nombre, activo')
+    .eq('correo', email)
     .maybeSingle()
 
   if (error) {
@@ -23,7 +23,14 @@ export async function verificarAdmin(email) {
   if (!data) {
     return {
       admin: false,
-      motivo: 'Este correo no está autorizado para acceder al panel.',
+      motivo: 'Este correo no esta autorizado para acceder al panel.',
+    }
+  }
+
+  if (data.activo === false) {
+    return {
+      admin: false,
+      motivo: 'Tu cuenta de administrador esta desactivada.',
     }
   }
 
