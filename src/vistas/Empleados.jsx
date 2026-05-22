@@ -30,7 +30,8 @@ export default function Empleados() {
     apellidos: '',
     departamento: '',
     cargo: '',
-    tolerancia_minutos: 15
+    tolerancia_minutos: 15,
+    fecha_cumpleanos: ''
   })
 
   // Estados independientes para el control horario AM/PM (100% cliqueable)
@@ -232,7 +233,8 @@ export default function Empleados() {
       apellidos: empleado.apellidos,
       departamento: empleado.departamento,
       cargo: empleado.cargo,
-      tolerancia_minutos: empleado.tolerancia_minutos
+      tolerancia_minutos: empleado.tolerancia_minutos,
+      fecha_cumpleanos: empleado.fecha_cumpleanos || ''
     })
 
     const entrada = desglosarHoraA12h(empleado.hora_entrada)
@@ -251,7 +253,7 @@ export default function Empleados() {
 
   const cancelarEdicion = () => {
     setEditandoId(null)
-    setFormulario({ cedula: '', nombres: '', apellidos: '', departamento: '', cargo: '', tolerancia_minutos: 15 })
+    setFormulario({ cedula: '', nombres: '', apellidos: '', departamento: '', cargo: '', tolerancia_minutos: 15, fecha_cumpleanos: '' })
     setEntHora('08')
     setEntMinuto('00')
     setEntPeriodo('AM')
@@ -271,9 +273,11 @@ export default function Empleados() {
 
     const datosEmpleado = {
       ...formulario,
-      tolerancia_minutos: Number(formulario.tolerancia_minutos) || 0, // input number devuelve string
+      tolerancia_minutos: Number(formulario.tolerancia_minutos) || 0,
       hora_entrada: horaEntradaFinal,
       hora_salida: horaSalidaFinal,
+      // Null si esta vacio, asi la columna queda null (no string vacio que rompe DATE)
+      fecha_cumpleanos: formulario.fecha_cumpleanos || null,
     }
 
     const { error: resultadoError } = editandoId
@@ -406,6 +410,13 @@ export default function Empleados() {
               Tolerancia (Minutos)
             </label>
             <input type="number" name="tolerancia_minutos" value={formulario.tolerancia_minutos} onChange={manejarCambio} required min="0" max="60" style={estiloInputBase} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#ec4899', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Fecha de Cumpleaños 🎂 (opcional)
+            </label>
+            <input type="date" name="fecha_cumpleanos" value={formulario.fecha_cumpleanos || ''} onChange={manejarCambio} style={{ ...estiloInputBase, borderColor: '#f9a8d4', backgroundColor: '#fdf2f8', color: '#831843' }} />
           </div>
 
           <div>

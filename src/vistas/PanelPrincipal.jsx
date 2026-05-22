@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../supabase'
 import {
   MapPin, Users, Calendar as CalendarIcon, Clock, Download,
-  CheckCircle, AlertTriangle, UserCheck, FileWarning, Activity, TrendingUp, RefreshCw
+  CheckCircle, AlertTriangle, UserCheck, FileWarning, Activity, TrendingUp, RefreshCw, Cake
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -18,6 +18,7 @@ export default function PanelPrincipal() {
   const [presencia, setPresencia] = useState([])
   const [registros, setRegistros] = useState([])
   const [alertas, setAlertas] = useState([])
+  const [cumpleaneros, setCumpleaneros] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [ultimoRefresh, setUltimoRefresh] = useState(null)
@@ -25,7 +26,7 @@ export default function PanelPrincipal() {
   const cargarTodo = useCallback(async () => {
     setCargando(true)
     setError('')
-    const [resKpis, resPres, resReg, resAlert] = await Promise.all([
+    const [resKpis, resPres, resReg, resAlert, resCumple] = await Promise.all([
       supabase.from('vw_kpis_hoy').select('*').maybeSingle(),
       supabase.from('vw_presencia_actual').select('*'),
       supabase.from('asistencia_registros')
@@ -33,7 +34,8 @@ export default function PanelPrincipal() {
         .gte('fecha', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().substring(0, 10))
         .order('fecha', { ascending: false })
         .limit(500),
-      supabase.from('alertas').select('*').eq('resuelta', false).order('creada_en', { ascending: false }).limit(20)
+      supabase.from('alertas').select('*').eq('resuelta', false).order('creada_en', { ascending: false }).limit(20),
+      supabase.from('vw_cumpleanos_proximos').select('*').lte('dias_hasta_cumple', 30)
     ])
     const err = resKpis.error || resPres.error || resReg.error || resAlert.error
     if (err) {
@@ -43,6 +45,7 @@ export default function PanelPrincipal() {
       setPresencia(resPres.data || [])
       setRegistros(resReg.data || [])
       setAlertas(resAlert.data || [])
+      setCumpleaneros(resCumple.data || [])
     }
     setUltimoRefresh(new Date())
     setCargando(false)
@@ -59,6 +62,7 @@ export default function PanelPrincipal() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencia_registros' }, () => cargarTodo())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, () => cargarTodo())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'justificaciones' }, () => cargarTodo())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'empleados' }, () => cargarTodo())
       .subscribe()
     const id = setInterval(cargarTodo, 60_000)
     return () => {
@@ -229,6 +233,38 @@ export default function PanelPrincipal() {
           )}
         </div>
       </div>
+
+      {/* CUMPLEAÑOS PROXIMOS */}
+      {cumpleaneros.length > 0 && (
+        <div style={{ marginBottom: '24px', backgroundColor: 'white', padding: '22px', borderRadius: '14px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
+          <h3 style={{ margin: '0 0 18px 0', color: '#1e293b', fontSize: '15px', fontWeight: '800', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Cake size={18} color="#ec4899" /> Próximos cumpleaños ({cumpleaneros.length})
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+            {cumpleaneros.map(c => {
+              const esHoy = c.dias_hasta_cumple === 0
+              return (
+                <div key={c.cedula} style={{ padding: 12, borderRadius: 10, backgroundColor: esHoy ? '#fce7f3' : '#f8fafc', borderLeft: `3px solid ${esHoy ? '#ec4899' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {c.foto_url ? (
+                    <img src={c.foto_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: esHoy ? '#ec4899' : '#94a3b8', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 13 }}>
+                      {(c.nombres || '?').charAt(0)}{(c.apellidos || '').charAt(0)}
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: '#1e293b' }}>{c.nombres} {c.apellidos}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{c.departamento || ''} · {c.fecha_cumpleanos}</div>
+                  </div>
+                  <div style={{ padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 800, backgroundColor: esHoy ? '#ec4899' : '#e2e8f0', color: esHoy ? 'white' : '#475569' }}>
+                    {esHoy ? 'HOY 🎂' : c.dias_hasta_cumple === 1 ? 'Mañana' : `En ${c.dias_hasta_cumple}d`}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* PRESENCIA EN VIVO */}
       <div style={{ marginBottom: '24px', backgroundColor: 'white', padding: '22px', borderRadius: '14px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }}>
