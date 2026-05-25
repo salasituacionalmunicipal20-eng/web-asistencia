@@ -119,10 +119,14 @@ function App() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '15px', boxSizing: 'border-box' }}>
         <div style={{ backgroundColor: 'white', padding: isMobile ? '25px' : '40px', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', width: '100%', maxWidth: '400px', boxSizing: 'border-box' }}>
 
-          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-            <ShieldCheck size={48} color="#0284c7" style={{ margin: '0 auto 10px' }} />
-            <h2 style={{ fontSize: '20px', color: '#1e293b', margin: '0 0 5px 0', textTransform: 'uppercase', fontWeight: '800' }}>Alcaldía de Charallave</h2>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>SALA SITUACIONAL - CONTROL DE ACCESO</p>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, marginBottom: 14, padding: '12px 4px', borderBottom: '3px solid #ffcc00' }}>
+              <img src="logos/cristobal-rojas.png" alt="Cristobal Rojas" style={{ height: 56, objectFit: 'contain' }} />
+              <img src="logos/yuhismar.png" alt="Yuhismar Hernandez" style={{ height: 32, objectFit: 'contain' }} />
+              <img src="logos/psuv.png" alt="PSUV" style={{ height: 40, objectFit: 'contain' }} />
+            </div>
+            <h2 style={{ fontSize: '18px', color: '#0033a1', margin: '0 0 4px 0', textTransform: 'uppercase', fontWeight: '900', letterSpacing: '0.5px' }}>Alcaldía de Cristóbal Rojas</h2>
+            <p style={{ fontSize: '12px', color: '#7c1d2e', margin: 0, fontWeight: 700, letterSpacing: '0.5px' }}>SALA SITUACIONAL · CONTROL DE ACCESO</p>
           </div>
 
           <form onSubmit={manejarLoginDirecto} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -186,10 +190,10 @@ function App() {
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh', backgroundColor: t.bgApp, color: t.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
       {isMobile && (
-        <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 1000 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <ShieldCheck size={24} color="#38bdf8" />
-            <span style={{ fontWeight: '700', fontSize: '14px', textTransform: 'uppercase' }}>Alcaldía de Charallave</span>
+        <div style={{ background: 'linear-gradient(180deg, #001a5c 0%, #0033a1 100%)', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #ffcc00', position: 'sticky', top: 0, zIndex: 1000 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 10px', borderRadius: '8px' }}>
+            <img src="logos/cristobal-rojas.png" alt="" style={{ height: 30, objectFit: 'contain' }} />
+            <img src="logos/psuv.png" alt="" style={{ height: 24, objectFit: 'contain' }} />
           </div>
           <button onClick={() => setMenuAbiertoMobile(!menuAbiertoMobile)} style={{ backgroundColor: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             {menuAbiertoMobile ? <X size={26} /> : <Menu size={26} />}
@@ -210,11 +214,15 @@ function App() {
         zIndex: 999
       }}>
         {!isMobile && (
-          <div style={{ padding: '25px 20px', borderBottom: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
-            <ShieldCheck size={40} color="#38bdf8" />
+          <div style={{ padding: '20px 16px', borderBottom: '3px solid #ffcc00', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(180deg, #001a5c 0%, #0033a1 100%)' }}>
+            <div style={{ background: 'white', padding: '10px 12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}>
+              <img src="logos/cristobal-rojas.png" alt="" style={{ height: 42, objectFit: 'contain' }} />
+              <img src="logos/yuhismar.png" alt="" style={{ height: 24, objectFit: 'contain' }} />
+              <img src="logos/psuv.png" alt="" style={{ height: 32, objectFit: 'contain' }} />
+            </div>
             <div>
-              <h2 style={{ fontSize: '15px', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>Alcaldía de Charallave</h2>
-              <p style={{ fontSize: '12px', margin: 0, color: '#94a3b8' }}>Municipio Cristóbal Rojas</p>
+              <h2 style={{ fontSize: '14px', margin: '0 0 4px 0', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '800', color: '#ffcc00' }}>Cristóbal Rojas</h2>
+              <p style={{ fontSize: '11px', margin: 0, color: '#cbd5e1', fontWeight: 600 }}>Sala Situacional · Control de Acceso</p>
             </div>
           </div>
         )}
