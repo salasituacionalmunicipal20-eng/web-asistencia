@@ -5,6 +5,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { dibujarHeaderPDF, dibujarFooterPDF } from '../lib/pdfHeader'
 import { useTema } from '../theme/ThemeProvider'
 
 /**
@@ -122,8 +123,10 @@ function PanelExpediente() {
 
   const exportarPDF = () => {
     const doc = new jsPDF()
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold')
-    doc.text('ALCALDIA DE CHARALLAVE - EXPEDIENTE COMPLETO', 14, 18)
+    const yInicio = dibujarHeaderPDF(doc, {
+      titulo: 'Expediente Completo de Personal',
+      subtitulo: `${empleados.length} empleados registrados`
+    })
     const body = []
     empleados.forEach(emp => {
       const hist = (indice.get(emp.cedula) || { asis: [], just: [], vac: [] })
@@ -135,7 +138,15 @@ function PanelExpediente() {
       if (items.length === 0) body.push(['-', 'Sin actividad', '-'])
       else items.sort((a, b) => new Date(b[0]) - new Date(a[0])).forEach(r => body.push(r))
     })
-    autoTable(doc, { startY: 26, head: [['Fecha', 'Tipo', 'Detalle']], body, theme: 'grid', styles: { fontSize: 9 }, headStyles: { fillColor: [79, 70, 229] } })
+    autoTable(doc, {
+      startY: yInicio + 4,
+      head: [['Fecha', 'Tipo', 'Detalle']],
+      body,
+      theme: 'grid',
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [10, 35, 81] },
+      didDrawPage: () => dibujarFooterPDF(doc)
+    })
     doc.save('Expediente_Charallave.pdf')
   }
 

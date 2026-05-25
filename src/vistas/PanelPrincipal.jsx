@@ -7,6 +7,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { dibujarHeaderPDF, dibujarFooterPDF } from '../lib/pdfHeader'
 
 /**
  * Panel ejecutivo: KPIs en vivo, presencia actual, ultimos 7 dias, alertas.
@@ -102,11 +103,10 @@ export default function PanelPrincipal() {
   // --- PDF -------------------------------------------------------------
   const generarPDF = () => {
     const doc = new jsPDF()
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('ALCALDIA DEL MUNICIPIO CRISTOBAL ROJAS - CHARALLAVE', 14, 20)
-    doc.setFontSize(12)
-    doc.text('Despacho de la Alcaldesa - Reporte General de Jornada', 14, 28)
+    const yInicio = dibujarHeaderPDF(doc, {
+      titulo: 'Reporte General de Jornada',
+      subtitulo: `${registros.length} registros - Periodo: ultimos 7 dias`
+    })
 
     const tabla = registros.map(r => [
       r.empleado_id,
@@ -117,11 +117,12 @@ export default function PanelPrincipal() {
     ])
 
     autoTable(doc, {
-      startY: 38,
+      startY: yInicio + 4,
       head: [['Cedula', 'Fecha', 'Hora Entrada', 'Hora Salida', 'Red']],
       body: tabla,
       theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42] }
+      headStyles: { fillColor: [10, 35, 81] },  // #0a2351
+      didDrawPage: () => dibujarFooterPDF(doc)
     })
     doc.save('Asistencia_Charallave.pdf')
   }

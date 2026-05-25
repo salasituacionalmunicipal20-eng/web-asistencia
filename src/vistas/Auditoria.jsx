@@ -4,6 +4,7 @@ import { ScrollText, Filter, RefreshCw, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { dibujarHeaderPDF, dibujarFooterPDF } from '../lib/pdfHeader'
 import { useTema } from '../theme/ThemeProvider'
 
 /**
@@ -37,13 +38,12 @@ export default function Auditoria() {
 
   const exportarPDF = () => {
     const doc = new jsPDF()
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('ALCALDIA DE CHARALLAVE - LOG DE AUDITORIA', 14, 18)
-    doc.setFontSize(10)
-    doc.text(`Generado: ${new Date().toLocaleString('es-VE')} - ${registros.length} registros`, 14, 25)
+    const yInicio = dibujarHeaderPDF(doc, {
+      titulo: 'Log de Auditoria del Sistema',
+      subtitulo: `${registros.length} registros - Trazabilidad de acciones administrativas`
+    })
     autoTable(doc, {
-      startY: 32,
+      startY: yInicio + 4,
       head: [['Fecha', 'Tabla', 'Accion', 'Registro', 'Usuario', 'Valor nuevo']],
       body: registros.map(r => [
         new Date(r.ocurrido_en).toLocaleString('es-VE'),
@@ -55,7 +55,8 @@ export default function Auditoria() {
       ]),
       theme: 'grid',
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [15, 23, 42] }
+      headStyles: { fillColor: [10, 35, 81] },
+      didDrawPage: () => dibujarFooterPDF(doc)
     })
     doc.save(`Auditoria_${new Date().toISOString().substring(0,10)}.pdf`)
   }
