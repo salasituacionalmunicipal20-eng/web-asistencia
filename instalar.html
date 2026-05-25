@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>App de Asistencia · Alcaldía de Cristóbal Rojas</title>
+    <meta name="description" content="Descarga la aplicación oficial de control de asistencia de la Alcaldía de Cristóbal Rojas para empleados." />
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: #f1f4f8; color: #1e293b; min-height: 100vh; }
+
+        .cintillo { background: #0a2351; color: white; text-align: center; padding: 6px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+
+        .barra-logos {
+            background: white; padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .barra-logos img { height: 44px; width: auto; object-fit: contain; }
+        .barra-logos .logo-cr { height: 50px; }
+        .barra-logos .logo-yu { height: 32px; }
+        @media (max-width: 500px) {
+            .barra-logos img { height: 34px; }
+            .barra-logos .logo-cr { height: 38px; }
+            .barra-logos .logo-yu { height: 24px; }
+            .barra-logos { padding: 10px 14px; }
+        }
+
+        .contenedor { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+
+        .header {
+            background: #0a2351; color: white;
+            padding: 32px 28px; border-radius: 6px;
+            border-left: 4px solid #d4a017;
+            margin-bottom: 22px;
+        }
+        .header-titulo { font-size: 11px; margin: 0 0 8px; letter-spacing: 2.5px; font-weight: 600; text-transform: uppercase; color: #d4a017; }
+        .header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; }
+        .header p { margin: 10px 0 0; font-size: 14px; color: rgba(255,255,255,0.78); line-height: 1.5; }
+
+        .tarjeta {
+            background: white; border-radius: 6px; padding: 24px;
+            margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+        }
+        .tarjeta-titulo {
+            font-size: 12px; font-weight: 700; color: #0a2351;
+            text-transform: uppercase; letter-spacing: 1px;
+            margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .tarjeta-titulo .num {
+            background: #0a2351; color: white;
+            width: 26px; height: 26px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700;
+        }
+
+        .btn-descargar {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            width: 100%; padding: 18px;
+            background: #0a2351; color: white; text-decoration: none;
+            border-radius: 6px; font-size: 16px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1px;
+            transition: background 0.15s;
+            border-bottom: 3px solid #d4a017;
+        }
+        .btn-descargar:hover { background: #14306d; }
+        .btn-descargar .icon-android {
+            font-size: 22px;
+        }
+        .descarga-meta {
+            margin-top: 10px; font-size: 12px; color: #64748b;
+            text-align: center;
+        }
+
+        ol.pasos { padding-left: 0; list-style: none; counter-reset: paso; margin: 0; }
+        ol.pasos li {
+            counter-increment: paso;
+            padding: 14px 14px 14px 56px;
+            position: relative;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            border-left: 3px solid #0a2351;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        ol.pasos li::before {
+            content: counter(paso);
+            position: absolute;
+            left: 14px; top: 14px;
+            width: 28px; height: 28px;
+            background: #0a2351; color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 13px;
+        }
+        ol.pasos li strong { color: #0a2351; }
+
+        .aviso {
+            padding: 14px 16px; border-radius: 4px;
+            background: #fffbeb; border-left: 3px solid #d4a017;
+            color: #78350f; font-size: 13.5px; line-height: 1.5;
+        }
+        .aviso strong { color: #92400e; }
+
+        .features { display: grid; gap: 10px; }
+        .feature {
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 12px; border-radius: 4px; background: #f8fafc;
+        }
+        .feature-icon {
+            font-size: 22px; line-height: 1;
+            background: #0a2351; color: white;
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .feature-text { font-size: 13.5px; color: #334155; line-height: 1.45; }
+        .feature-text strong { color: #0a2351; display: block; margin-bottom: 2px; font-size: 14px; }
+
+        .footer-logos {
+            display: flex; justify-content: center; align-items: center; gap: 16px;
+            margin: 22px 0 6px; padding: 14px 16px; border-top: 1px solid #e2e8f0;
+        }
+        .footer-logos img { height: 32px; width: auto; object-fit: contain; opacity: 0.85; }
+        .footer-logos .logo-cr { height: 36px; }
+        .footer-logos .logo-yu { height: 24px; }
+
+        .footer { text-align: center; color: #64748b; padding: 14px 12px 8px; font-size: 11.5px; font-weight: 500; }
+        .footer strong { color: #0a2351; font-weight: 700; }
+
+        code {
+            background: #1e293b; color: #f1f5f9;
+            padding: 2px 8px; border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cintillo">República Bolivariana de Venezuela · Estado Miranda · Alcaldía de Cristóbal Rojas</div>
+
+    <div class="barra-logos">
+        <img src="logos/cristobal-rojas.png" alt="Alcaldía Cristóbal Rojas" class="logo-cr" />
+        <img src="logos/yuhismar.png" alt="Yuhismar Hernández" class="logo-yu" />
+        <img src="logos/psuv.png" alt="PSUV" />
+    </div>
+
+    <div class="contenedor">
+
+        <!-- HEADER -->
+        <div class="header">
+            <p class="header-titulo">Despacho de la Alcaldesa — Recursos Humanos</p>
+            <h1>App de Control de Asistencia</h1>
+            <p>Aplicación oficial para empleados del Municipio Cristóbal Rojas. Permite registrar entrada y salida desde el teléfono, con validación de ubicación y biometría.</p>
+        </div>
+
+        <!-- BOTÓN DESCARGAR -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo">Descargar la aplicación</h2>
+            <a href="AlcaldiaControlAcceso.apk" download="AlcaldiaControlAcceso.apk" class="btn-descargar">
+                <span class="icon-android">📲</span>
+                Descargar APK (Android)
+            </a>
+            <p class="descarga-meta">Versión 1.0.0 · ~32 MB · Requiere Android 7.0 o superior</p>
+        </div>
+
+        <!-- QUÉ HACE LA APP -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo">¿Qué puedes hacer con la app?</h2>
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">⏰</div>
+                    <div class="feature-text"><strong>Marcar entrada y salida</strong>Registra tu jornada desde el teléfono sin necesidad de ir a un punto físico.</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📍</div>
+                    <div class="feature-text"><strong>Validación por GPS</strong>El sistema confirma que estás en una de las sedes autorizadas al marcar.</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-text"><strong>Huella digital o PIN</strong>Confirma tu identidad antes de cada marcaje para evitar suplantaciones.</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📋</div>
+                    <div class="feature-text"><strong>Justificar inasistencias</strong>Envía justificaciones con motivo y foto desde la app, y solicita vacaciones.</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-text"><strong>Consulta tu historial</strong>Revisa tus marcajes, días puntuales, atrasos y estadísticas personales.</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📨</div>
+                    <div class="feature-text"><strong>Recibe memorándums</strong>El Despacho puede enviarte comunicaciones oficiales que llegan a tu teléfono.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSTRUCCIONES INSTALACIÓN -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo"><span class="num">A</span> Instalación en su teléfono</h2>
+            <ol class="pasos">
+                <li><strong>Toca el botón "Descargar APK"</strong> de arriba en el navegador de tu teléfono. El archivo se guardará en la carpeta de Descargas.</li>
+                <li><strong>Abre el archivo descargado</strong> tocando la notificación que aparece, o ve a tu administrador de archivos → carpeta <code>Descargas</code> → <code>AlcaldiaControlAcceso.apk</code>.</li>
+                <li>Aparecerá un aviso que dice <strong>"Por seguridad, tu teléfono no permite instalar aplicaciones de fuentes desconocidas"</strong>. Toca en <strong>"Configuración"</strong> o <strong>"Ajustes"</strong>.</li>
+                <li>Activa el interruptor <strong>"Permitir desde esta fuente"</strong> y regresa atrás. Vuelve a abrir el archivo.</li>
+                <li>Toca <strong>"Instalar"</strong>. La instalación tarda menos de 30 segundos.</li>
+                <li>Una vez instalada, abre la app desde tu pantalla principal. <strong>Acepta los permisos</strong> de ubicación, cámara y notificaciones cuando los pida.</li>
+            </ol>
+        </div>
+
+        <!-- PRIMER LOGIN -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo"><span class="num">B</span> Tu primer acceso</h2>
+            <ol class="pasos">
+                <li>Tu usuario es tu <strong>cédula de identidad</strong> (formato V12345678 con la V en mayúscula y sin guiones).</li>
+                <li>Tu <strong>clave inicial</strong> es <code>123456</code>. El sistema te pedirá cambiarla en el primer login.</li>
+                <li>Después del cambio de clave, completa tu perfil agregando tu <strong>fecha de nacimiento</strong>. Es obligatorio y permite que el equipo celebre tu cumpleaños.</li>
+                <li>Listo. Ya puedes marcar tu entrada del día.</li>
+            </ol>
+        </div>
+
+        <!-- AVISO IMPORTANTE -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo">Recordatorios importantes</h2>
+            <div class="aviso">
+                <strong>Activar la ubicación (GPS):</strong> La app necesita que el GPS de tu teléfono esté encendido para verificar que estás en la sede al marcar. Sin GPS activo no podrás registrar entrada ni salida.<br><br>
+                <strong>Conexión a internet:</strong> Necesitas datos móviles o WiFi para enviar el marcaje. Si no tienes señal en el momento, los datos se guardan y se envían cuando vuelvas a conectarte.<br><br>
+                <strong>No compartas tu clave:</strong> Tu marcaje es personal e intransferible. Si crees que alguien conoce tu clave, contacta inmediatamente a Recursos Humanos para resetearla.
+            </div>
+        </div>
+
+        <!-- SOPORTE -->
+        <div class="tarjeta">
+            <h2 class="tarjeta-titulo">¿Problemas con la app?</h2>
+            <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.5;">
+                Si tu cédula no es reconocida, no recuerdas tu clave, o la app no marca tu entrada, comunícate con el <strong style="color:#0a2351">Departamento de Recursos Humanos</strong> de la Alcaldía para que verifiquen tu registro y te ayuden a resolver el inconveniente.
+            </p>
+        </div>
+
+        <div class="footer-logos">
+            <img src="logos/cristobal-rojas.png" alt="" class="logo-cr" />
+            <img src="logos/yuhismar.png" alt="" class="logo-yu" />
+            <img src="logos/psuv.png" alt="" />
+        </div>
+        <div class="footer">
+            Despacho de la <strong>Alcaldesa Yuhismar Hernández</strong> · Municipio Cristóbal Rojas
+        </div>
+
+    </div>
+</body>
+</html>
