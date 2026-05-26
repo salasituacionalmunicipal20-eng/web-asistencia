@@ -409,7 +409,7 @@ export default function Empleados() {
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Tolerancia (Minutos)
             </label>
-            <input type="number" name="tolerancia_minutos" value={formulario.tolerancia_minutos} onChange={manejarCambio} required min="0" max="60" style={estiloInputBase} />
+            <input type="number" name="tolerancia_minutos" value={formulario.tolerancia_minutos} onChange={manejarCambio} required min="0" style={estiloInputBase} />
           </div>
 
           <div>
