@@ -171,6 +171,15 @@ function App() {
               {errorLogin}
             </div>
           )}
+
+          {/* Enlace cruzado al otro sistema institucional */}
+          <div style={{ marginTop: 18, padding: '12px 14px', background: '#f1f5f9', borderLeft: '3px solid #0a2351', borderRadius: 4, textAlign: 'center', fontSize: 13 }}>
+            <span style={{ color: '#475569' }}>¿Buscas la Sala Situacional / Censo?</span><br />
+            <a href="https://salasituacionalmunicipal20-eng.github.io/registro-alcaldia/"
+               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, color: '#0a2351', fontWeight: 800, textDecoration: 'none', padding: '6px 12px', border: '1px solid #0a2351', borderRadius: 4 }}>
+              Ir a Sala Situacional →
+            </a>
+          </div>
         </div>
       </div>
     )
