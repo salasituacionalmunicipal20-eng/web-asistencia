@@ -25,8 +25,8 @@ export default function Empleados() {
 
   // Catalogos para los selects. Si necesitas agregar mas opciones, edita estos
   // arrays. La opcion preseleccionada es siempre la primera.
-  const OPCIONES_DEPARTAMENTOS = ['Sala Situacional']
-  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa']
+  const OPCIONES_DEPARTAMENTOS = ['Sala Situacional', 'Chofer']
+  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa', 'Informatico']
 
   // Estados para los campos de texto estándar (valores por defecto = mas comun)
   const [formulario, setFormulario] = useState({
