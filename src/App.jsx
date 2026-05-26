@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -14,6 +14,7 @@ import Reportes from './vistas/Reportes'
 import Configuracion from './vistas/Configuracion'
 import Vacaciones from './vistas/Vacaciones'
 import Auditoria from './vistas/Auditoria'
+import Administradores from './vistas/Administradores'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
@@ -183,6 +184,7 @@ function App() {
     { id: 'reportes', icon: BookOpen, label: 'Reportes' },
     { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
     { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
+    { id: 'administradores', icon: UserCog, label: 'Administradores' },
     { id: 'configuracion', icon: Settings, label: 'Configuracion' },
   ]
 
@@ -272,6 +274,7 @@ function App() {
         <div style={{ display: vistaActual === 'reportes' ? 'block' : 'none' }}><Reportes /></div>
         <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
+        <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
         <div style={{ display: vistaActual === 'configuracion' ? 'block' : 'none' }}><Configuracion /></div>
       </div>
 
