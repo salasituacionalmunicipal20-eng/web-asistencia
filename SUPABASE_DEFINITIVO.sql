@@ -253,7 +253,17 @@ GRANT SELECT ON vw_kpis_hoy TO anon, authenticated;
 
 -- ============================================================================
 -- 9. RPCs
+-- ----------------------------------------------------------------------------
+-- DROP previo: necesario porque CREATE OR REPLACE no puede cambiar el tipo
+-- de retorno de una funcion existente (las versiones nuevas anaden columnas
+-- como foto_url, fecha_cumpleanos). Idempotente con IF EXISTS.
 -- ============================================================================
+DROP FUNCTION IF EXISTS public.verificar_clave(text, text);
+DROP FUNCTION IF EXISTS public.actualizar_clave(text, text);
+DROP FUNCTION IF EXISTS public.aprobar_justificacion(uuid, boolean, text, text);
+DROP FUNCTION IF EXISTS public.resetear_clave_empleado(text, text, text);
+DROP FUNCTION IF EXISTS public.importar_empleado(text, text, text, text, text, time, time, int, text);
+
 CREATE OR REPLACE FUNCTION public.verificar_clave(p_cedula text, p_clave text)
 RETURNS TABLE (cedula text, nombres text, apellidos text, departamento text,
                cargo text, hora_entrada text, hora_salida text,
