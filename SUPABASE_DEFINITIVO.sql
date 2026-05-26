@@ -1,13 +1,11 @@
 -- ============================================================================
--- SUPABASE_DEFINITIVO.sql - SINGLE SOURCE OF TRUTH
+-- SUPABASE_DEFINITIVO.sql - Setup completo del backend
 -- ============================================================================
--- Pega TODO este script en una sola query del SQL Editor de Supabase y dale Run.
--- 100% idempotente: si las tablas ya existen, agrega las columnas faltantes sin
--- borrar tus datos. Si no existe nada, crea todo desde cero. Termina insertando
--- el primer admin + los 36 empleados de la Sala Situacional PSUV.
+-- Pega TODO en una sola query del SQL Editor de Supabase y dale Run.
+-- Idempotente: crea de cero o repara lo existente sin perder datos.
 --
--- IMPORTANTE: solo borra la tabla asistencia_registros si detecta el schema VIEJO
--- (con dispositivo_id, tipo_red, etc). Si ya esta en formato correcto la respeta.
+-- NOTA: Este script NO carga los empleados. Esos los subes a mano desde el
+-- panel web -> Gestion de Personal una vez que el setup quede listo.
 -- ============================================================================
 
 
@@ -99,7 +97,7 @@ CREATE TABLE IF NOT EXISTS empleados (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     cedula text UNIQUE NOT NULL
 );
--- ASEGURA cada columna requerida (idempotente, no rompe nada existente)
+-- ASEGURA cada columna requerida (idempotente)
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS nombres            text;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS apellidos          text;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS departamento       text;
@@ -115,7 +113,8 @@ ALTER TABLE empleados ADD COLUMN IF NOT EXISTS requiere_cambio_clave boolean DEF
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS foto_url           text;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS fecha_cumpleanos   date;
 
-UPDATE empleados SET clave_hash = crypt(clave, gen_salt('bf', 10))
+-- Backfill hash bcrypt para claves cleartext (usa extensions.crypt explicitamente)
+UPDATE empleados SET clave_hash = extensions.crypt(clave, extensions.gen_salt('bf', 10))
 WHERE clave_hash IS NULL AND clave IS NOT NULL;
 
 ALTER TABLE empleados ENABLE ROW LEVEL SECURITY;
@@ -254,22 +253,25 @@ GRANT SELECT ON vw_kpis_hoy TO anon, authenticated;
 -- ============================================================================
 -- 9. RPCs
 -- ----------------------------------------------------------------------------
--- DROP previo: necesario porque CREATE OR REPLACE no puede cambiar el tipo
--- de retorno de una funcion existente (las versiones nuevas anaden columnas
--- como foto_url, fecha_cumpleanos). Idempotente con IF EXISTS.
+-- DROP FUNCTION IF EXISTS: necesario porque CREATE OR REPLACE no permite
+-- cambiar el tipo de retorno (las versiones nuevas anaden columnas).
+-- search_path: incluye 'extensions' para que las funciones encuentren
+-- gen_salt() y crypt() de pgcrypto (Supabase los instala en ese schema).
 -- ============================================================================
 DROP FUNCTION IF EXISTS public.verificar_clave(text, text);
 DROP FUNCTION IF EXISTS public.actualizar_clave(text, text);
 DROP FUNCTION IF EXISTS public.aprobar_justificacion(uuid, boolean, text, text);
 DROP FUNCTION IF EXISTS public.resetear_clave_empleado(text, text, text);
 DROP FUNCTION IF EXISTS public.importar_empleado(text, text, text, text, text, time, time, int, text);
+DROP FUNCTION IF EXISTS public.actualizar_cumpleanos(text, date);
 
+-- verificar_clave: login server-side de empleados (bcrypt + fallback cleartext)
 CREATE OR REPLACE FUNCTION public.verificar_clave(p_cedula text, p_clave text)
 RETURNS TABLE (cedula text, nombres text, apellidos text, departamento text,
                cargo text, hora_entrada text, hora_salida text,
                tolerancia_minutos int, requiere_cambio_clave boolean,
                foto_url text, fecha_cumpleanos text)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, extensions AS $$
 BEGIN
     RETURN QUERY
     SELECT e.cedula, e.nombres, e.apellidos, e.departamento, e.cargo,
@@ -284,8 +286,10 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.verificar_clave(text, text) TO anon, authenticated;
 
+-- actualizar_clave: cambio de clave del propio empleado
 CREATE OR REPLACE FUNCTION public.actualizar_clave(p_cedula text, p_clave_nueva text)
-RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions AS $$
 DECLARE v_actualizadas int;
 BEGIN
     IF p_clave_nueva IS NULL OR length(p_clave_nueva) < 4 THEN
@@ -301,6 +305,7 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.actualizar_clave(text, text) TO anon, authenticated;
 
+-- aprobar_justificacion: admin aprueba/rechaza con auditoria
 CREATE OR REPLACE FUNCTION public.aprobar_justificacion(
     p_id uuid, p_aprobar boolean, p_comentario text DEFAULT NULL, p_admin_email text DEFAULT NULL)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -318,9 +323,11 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) TO anon, authenticated;
 
+-- resetear_clave_empleado: admin resetea la clave de un empleado
 CREATE OR REPLACE FUNCTION public.resetear_clave_empleado(
     p_cedula text, p_clave_nueva text, p_admin_email text DEFAULT NULL)
-RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions AS $$
 DECLARE v_actualizadas int;
 BEGIN
     IF p_clave_nueva IS NULL OR length(p_clave_nueva) < 4 THEN
@@ -338,13 +345,15 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) TO anon, authenticated;
 
+-- importar_empleado: bulk upsert (usado por el boton Importar CSV)
 CREATE OR REPLACE FUNCTION public.importar_empleado(
     p_cedula text, p_nombres text, p_apellidos text,
     p_departamento text, p_cargo text,
     p_hora_entrada time, p_hora_salida time,
     p_tolerancia_minutos int DEFAULT 15,
     p_clave_inicial text DEFAULT '123456')
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions AS $$
 DECLARE v_existe boolean; v_ced text := upper(trim(p_cedula));
 BEGIN
     SELECT EXISTS(SELECT 1 FROM empleados WHERE cedula = v_ced) INTO v_existe;
@@ -369,6 +378,22 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.importar_empleado(text, text, text, text, text, time, time, int, text) TO anon, authenticated;
 
+-- actualizar_cumpleanos: el empleado guarda su fecha de nacimiento
+CREATE OR REPLACE FUNCTION public.actualizar_cumpleanos(p_cedula text, p_fecha date)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public AS $$
+DECLARE v_actualizadas int;
+BEGIN
+    IF p_fecha IS NULL THEN RAISE EXCEPTION 'La fecha es obligatoria'; END IF;
+    IF p_fecha > CURRENT_DATE THEN RAISE EXCEPTION 'La fecha no puede ser futura'; END IF;
+    UPDATE empleados SET fecha_cumpleanos = p_fecha
+    WHERE cedula = upper(trim(p_cedula));
+    GET DIAGNOSTICS v_actualizadas = ROW_COUNT;
+    RETURN v_actualizadas = 1;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.actualizar_cumpleanos(text, date) TO anon, authenticated;
+
 
 -- ============================================================================
 -- 10. GRANTS finales
@@ -379,64 +404,22 @@ GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO postgres, anon, authen
 
 
 -- ============================================================================
--- 11. RELOAD SCHEMA CACHE (importantisimo)
+-- 11. RELOAD SCHEMA CACHE (importantisimo para que el web vea las columnas nuevas)
 -- ============================================================================
 NOTIFY pgrst, 'reload schema';
 
 
 -- ============================================================================
--- 12. CARGA INICIAL DE 36 EMPLEADOS - SALA SITUACIONAL PSUV
--- Excluye Carlos Linares (admin) y Susej Quintero (sin cedula)
--- ============================================================================
-SELECT importar_empleado('V14456114', 'LISMARY',   'GUTIERREZ',  'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V21117757', 'GENESIS',   'RIVAS',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V24672852', 'MARBELIS',  'LOPEZ',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V29905418', 'KAROLAY',   'ORTIZ',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V22348816', 'YULEYDIS',  'VILLALBA',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V29592390', 'EDGARDO',   'DURAN',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V25322562', 'MARYELIS',  'PACHECO',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V10891301', 'NIURKA',    'NORIEGA',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V6312547',  'YELITZA',   'ESCALONA',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V18710709', 'EVELYN',    'INFANTE',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V25284882', 'FELIX',     'HERAZO',     'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V17929170', 'LISMAINOR', 'GUTIERREZ',  'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V21149813', 'ANA',       'GARCIA',     'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V30176332', 'YEISY',     'CLARO',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V14142154', 'JOSELINE',  'RENGIFO',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V15419005', 'NANCY',     'MATO',       'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V15207777', 'LUZMARY',   'MUENTES',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V32681435', 'JOSE',      'CONTRERAS',  'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V25517865', 'ANYELIER',  'GUEVARA',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V15474648', 'NERYURY',   'ROJAS',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V33199881', 'LUCIA',     'RAMIREZ',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V30063114', 'ROYERMIR',  'LAYA',       'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V32897465', 'WUILMARYS', 'CHAPARRO',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V16521575', 'JENNY',     'ROJAS',      'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V33426838', 'DIEGO',     'MARTINEZ',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V12821744', 'MARLENES',  'ALAYON',     'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V14427441', 'YORLAND',   'MARTINEZ',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V26284072', 'JEFERSON',  'GARCIA',     'Sala Situacional PSUV', 'Chofer',   '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V25230385', 'NAIRE',     'PIÑANGO',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V16370021', 'AURISTELA', 'ZURITA',     'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V22348077', 'YIKEY',     'MACERO',     'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V15475146', 'JONATHAN',  'VILLALBA',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V25080245', 'VICMAR',    'INDRIAGO',   'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V13904317', 'JOEL',      'MOTORIZADO', 'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V13320802', 'JOSWAR',    'TIBALDO',    'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-SELECT importar_empleado('V16577089', 'YURMI',     'MORA',       'Sala Situacional PSUV', 'Empleado', '08:00:00', '17:00:00', 15, '123456');
-
-
--- ============================================================================
--- 13. VERIFICACION FINAL - debe mostrar 36 empleados y todas las RPCs en true
+-- 12. VERIFICACION FINAL
 -- ============================================================================
 SELECT
     (SELECT count(*)::int FROM empleados) AS total_empleados,
-    (SELECT count(*)::int FROM empleados WHERE departamento = 'Sala Situacional PSUV') AS sala_situacional,
     (SELECT count(*)::int FROM administradores_web) AS admins,
     (SELECT count(*)::int FROM oficinas) AS oficinas,
     (SELECT count(*)::int FROM turnos) AS turnos,
-    EXISTS(SELECT 1 FROM pg_proc WHERE proname='verificar_clave')       AS rpc_verificar_clave,
-    EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_clave')      AS rpc_actualizar_clave,
-    EXISTS(SELECT 1 FROM pg_proc WHERE proname='importar_empleado')     AS rpc_importar_empleado,
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='verificar_clave')         AS rpc_verificar_clave,
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_clave')        AS rpc_actualizar_clave,
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='importar_empleado')       AS rpc_importar_empleado,
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='resetear_clave_empleado') AS rpc_resetear,
-    EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy')         AS vw_kpis;
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_cumpleanos')   AS rpc_cumpleanos,
+    EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy')           AS vw_kpis;
