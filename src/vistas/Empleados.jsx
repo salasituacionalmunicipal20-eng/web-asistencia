@@ -23,23 +23,28 @@ export default function Empleados() {
     setCargandoLista(false)
   }, [])
 
-  // Estados para los campos de texto estándar
+  // Catalogos para los selects. Si necesitas agregar mas opciones, edita estos
+  // arrays. La opcion preseleccionada es siempre la primera.
+  const OPCIONES_DEPARTAMENTOS = ['Sala Situacional']
+  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa']
+
+  // Estados para los campos de texto estándar (valores por defecto = mas comun)
   const [formulario, setFormulario] = useState({
     cedula: '',
     nombres: '',
     apellidos: '',
-    departamento: '',
-    cargo: '',
+    departamento: OPCIONES_DEPARTAMENTOS[0],
+    cargo: OPCIONES_CARGOS[0],
     tolerancia_minutos: 15,
     fecha_cumpleanos: ''
   })
 
-  // Estados independientes para el control horario AM/PM (100% cliqueable)
-  const [entHora, setEntHora] = useState('08')
+  // Default horario: 7:00 AM - 5:00 PM. El usuario puede cambiarlo en cada alta.
+  const [entHora, setEntHora] = useState('07')
   const [entMinuto, setEntMinuto] = useState('00')
   const [entPeriodo, setEntPeriodo] = useState('AM')
 
-  const [salHora, setSalHora] = useState('04')
+  const [salHora, setSalHora] = useState('05')
   const [salMinuto, setSalMinuto] = useState('00')
   const [salPeriodo, setSalPeriodo] = useState('PM')
 
@@ -253,11 +258,17 @@ export default function Empleados() {
 
   const cancelarEdicion = () => {
     setEditandoId(null)
-    setFormulario({ cedula: '', nombres: '', apellidos: '', departamento: '', cargo: '', tolerancia_minutos: 15, fecha_cumpleanos: '' })
-    setEntHora('08')
+    setFormulario({
+      cedula: '', nombres: '', apellidos: '',
+      departamento: OPCIONES_DEPARTAMENTOS[0],
+      cargo: OPCIONES_CARGOS[0],
+      tolerancia_minutos: 15,
+      fecha_cumpleanos: ''
+    })
+    setEntHora('07')
     setEntMinuto('00')
     setEntPeriodo('AM')
-    setSalHora('04')
+    setSalHora('05')
     setSalMinuto('00')
     setSalPeriodo('PM')
     setMensaje({ texto: '', tipo: '' })
@@ -395,14 +406,18 @@ export default function Empleados() {
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Dirección / Departamento
             </label>
-            <input type="text" name="departamento" value={formulario.departamento} onChange={manejarCambio} required placeholder="Ej: Servicios Públicos" style={estiloInputBase} />
+            <select name="departamento" value={formulario.departamento} onChange={manejarCambio} required style={estiloInputBase}>
+              {OPCIONES_DEPARTAMENTOS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Cargo Asignado
             </label>
-            <input type="text" name="cargo" value={formulario.cargo} onChange={manejarCambio} required placeholder="Ej: Inspector de Campo" style={estiloInputBase} />
+            <select name="cargo" value={formulario.cargo} onChange={manejarCambio} required style={estiloInputBase}>
+              {OPCIONES_CARGOS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
 
           <div>
