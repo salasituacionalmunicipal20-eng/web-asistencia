@@ -523,21 +523,95 @@ function PanelHorasTrabajadas() {
 }
 
 // ============================================================================
-// 3. AUSENTES HOY
+// 3. AUSENTES — vista en vivo (hoy) + historico (fechas pasadas)
+// ----------------------------------------------------------------------------
+// - Si la fecha seleccionada es HOY: consulta `vw_ausentes_hoy` (reactiva).
+// - Si es fecha pasada: consulta `ausencias_diarias` (snapshot guardado).
+// - Boton "Guardar snapshot" llama al RPC snapshot_ausencias_dia(fecha).
+// - Exporta a Excel.
 // ============================================================================
 function PanelAusentes() {
   const { t } = useTema()
+  const hoyIso = new Date().toISOString().substring(0, 10)
+  const [fecha, setFecha] = useState(hoyIso)
   const [lista, setLista] = useState([])
   const [cargando, setCargando] = useState(false)
+  const [snapshotInfo, setSnapshotInfo] = useState(null)  // { count, generada_en } | null
+  const [guardando, setGuardando] = useState(false)
+  const [mensaje, setMensaje] = useState('')
 
-  useEffect(() => {
-    (async () => {
-      setCargando(true)
-      const { data } = await supabase.from('vw_ausentes_hoy').select('*')
-      setLista(data || [])
-      setCargando(false)
-    })()
-  }, [])
+  const esHoy = fecha === hoyIso
+
+  const cargar = useCallback(async () => {
+    setCargando(true)
+    setMensaje('')
+    if (esHoy) {
+      // Vista en vivo
+      const { data, error } = await supabase.from('vw_ausentes_hoy').select('*')
+      if (error) {
+        setMensaje(`⚠️ ${error.message}. ¿Corriste el SQL de REPORTES_AUSENCIAS?`)
+        setLista([])
+      } else {
+        setLista(data || [])
+      }
+      // Tambien chequea si ya hay un snapshot guardado de hoy
+      const { data: snap } = await supabase
+        .from('ausencias_diarias')
+        .select('generada_en')
+        .eq('fecha', fecha)
+        .limit(1)
+        .maybeSingle()
+      setSnapshotInfo(snap ? { generada_en: snap.generada_en } : null)
+    } else {
+      // Historico desde la tabla
+      const { data, error } = await supabase
+        .from('ausencias_diarias')
+        .select('*')
+        .eq('fecha', fecha)
+        .order('apellidos')
+      if (error) {
+        setMensaje(`⚠️ ${error.message}`)
+        setLista([])
+      } else {
+        setLista(data || [])
+        setSnapshotInfo(data && data.length > 0 ? { generada_en: data[0].generada_en } : null)
+      }
+    }
+    setCargando(false)
+  }, [fecha, esHoy])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const guardarSnapshot = async () => {
+    setGuardando(true)
+    setMensaje('')
+    const { data, error } = await supabase.rpc('snapshot_ausencias_dia', { p_fecha: fecha })
+    setGuardando(false)
+    if (error) {
+      setMensaje(`⛔ Error al guardar snapshot: ${error.message}`)
+    } else {
+      setMensaje(`✅ Snapshot guardado: ${data ?? 0} ausencias registradas para ${fecha}`)
+      cargar()
+    }
+  }
+
+  const exportarExcel = () => {
+    if (lista.length === 0) return
+    const filas = lista.map(a => ({
+      Fecha: fecha,
+      Cedula: a.cedula || a.empleado_id,
+      Nombres: a.nombres,
+      Apellidos: a.apellidos,
+      Departamento: a.departamento,
+      Cargo: a.cargo,
+      Estado: a.estado_falta || a.estado,
+      'Hora programada': String(a.hora_programada || '').substring(0, 5)
+    }))
+    const ws = XLSX.utils.json_to_sheet(filas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Ausencias')
+    XLSX.writeFile(wb, `Ausencias_${fecha}.xlsx`)
+  }
 
   const colorEstado = (s) => {
     if (s === 'JUSTIFICADO')    return { bg: t.exitoBg, fg: t.exito }
@@ -545,24 +619,73 @@ function PanelAusentes() {
     return { bg: t.errorBg, fg: t.error }
   }
 
+  // El estado viene como estado_falta (vista en vivo) o estado (snapshot)
+  const getEstado = (a) => a.estado_falta || a.estado || 'AUSENTE'
+  const getCedula = (a) => a.cedula || a.empleado_id
+
   return (
     <div style={{ backgroundColor: t.bgPanel, padding: 20, borderRadius: 14, border: `1px solid ${t.border}` }}>
       <h3 style={{ margin: '0 0 16px 0', color: t.text, fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <UserX size={20} color={t.error} /> Empleados sin marca hoy ({lista.length})
+        <UserX size={20} color={t.error} /> Ausencias del día — {esHoy ? 'HOY (en vivo)' : 'snapshot histórico'}
       </h3>
+
+      {/* Controles */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end', marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${t.borderSoft}` }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: t.textSoft, marginBottom: 4, textTransform: 'uppercase' }}>Fecha</label>
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} max={hoyIso}
+            style={{ padding: 10, borderRadius: 8, border: `1px solid ${t.border}`, backgroundColor: t.bgInput, color: t.text, fontWeight: 700, fontSize: 13 }} />
+        </div>
+        <button onClick={guardarSnapshot} disabled={guardando}
+          title="Genera/refresca el snapshot de ausencias para la fecha seleccionada"
+          style={{ padding: '10px 14px', backgroundColor: t.primario, color: 'white', border: 'none', borderRadius: 8, cursor: guardando ? 'wait' : 'pointer', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Save size={14} /> {guardando ? 'Guardando...' : (snapshotInfo ? 'Refrescar snapshot' : 'Guardar snapshot del día')}
+        </button>
+        {lista.length > 0 && (
+          <button onClick={exportarExcel}
+            style={{ padding: '10px 14px', backgroundColor: t.exito, color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <FileSpreadsheet size={14} /> Excel
+          </button>
+        )}
+        {snapshotInfo && (
+          <div style={{ fontSize: 11, color: t.textSoft, fontWeight: 600, marginLeft: 4 }}>
+            Snapshot generado: {new Date(snapshotInfo.generada_en).toLocaleString('es-VE')}
+          </div>
+        )}
+      </div>
+
+      {mensaje && (
+        <div style={{ marginBottom: 14, padding: 10, borderRadius: 8, backgroundColor: mensaje.startsWith('✅') ? t.exitoBg : t.errorBg, color: mensaje.startsWith('✅') ? t.exito : t.error, fontWeight: 700, fontSize: 13, borderLeft: `3px solid ${mensaje.startsWith('✅') ? t.exito : t.error}` }}>
+          {mensaje}
+        </div>
+      )}
+
+      <h4 style={{ margin: '0 0 12px 0', color: t.text, fontSize: 14, fontWeight: 800 }}>
+        {lista.length} {lista.length === 1 ? 'ausencia' : 'ausencias'} {esHoy ? 'sin marca aún' : `el ${fecha}`}
+      </h4>
+
       {lista.length === 0 ? (
-        <div style={{ padding: 30, textAlign: 'center', color: t.textMuted, fontWeight: 600 }}>{cargando ? 'Cargando...' : 'Todos los empleados ya marcaron hoy 🎉'}</div>
+        <div style={{ padding: 30, textAlign: 'center', color: t.textMuted, fontWeight: 600 }}>
+          {cargando
+            ? 'Cargando...'
+            : (esHoy
+                ? 'Todos los empleados ya marcaron hoy 🎉 (o no hay día laborable / es feriado)'
+                : (snapshotInfo
+                    ? 'Esta fecha tuvo 0 ausencias en su snapshot.'
+                    : 'No hay snapshot guardado de esta fecha. Genera uno con el botón "Guardar snapshot del día".'))}
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
           {lista.map(a => {
-            const c = colorEstado(a.estado_falta)
+            const estado = getEstado(a)
+            const c = colorEstado(estado)
             return (
-              <div key={a.cedula} style={{ padding: 14, borderRadius: 10, backgroundColor: c.bg, borderLeft: `4px solid ${c.fg}` }}>
+              <div key={getCedula(a)} style={{ padding: 14, borderRadius: 10, backgroundColor: c.bg, borderLeft: `4px solid ${c.fg}` }}>
                 <div style={{ fontWeight: 800, color: t.text, fontSize: 14 }}>{a.nombres} {a.apellidos}</div>
-                <div style={{ fontSize: 12, color: t.textSoft, fontWeight: 600, marginTop: 2 }}>{a.cedula} · {a.departamento}</div>
+                <div style={{ fontSize: 12, color: t.textSoft, fontWeight: 600, marginTop: 2 }}>{getCedula(a)} · {a.departamento}</div>
                 <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: t.textSoft, fontWeight: 600 }}>Programada: {String(a.hora_programada || '').substring(0, 5)}</span>
-                  <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 800, backgroundColor: c.fg + '33', color: c.fg, textTransform: 'uppercase' }}>{a.estado_falta}</span>
+                  <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 800, backgroundColor: c.fg + '33', color: c.fg, textTransform: 'uppercase' }}>{estado}</span>
                 </div>
               </div>
             )
