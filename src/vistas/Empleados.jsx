@@ -100,13 +100,26 @@ export default function Empleados() {
 
   // Lugares de trabajo (sedes) — se carga de la tabla `oficinas` y alimenta
   // el select del form. Solo lugares activos.
+  // Defensa: deduplicamos por nombre por si en la BD hay sedes duplicadas
+  // (mismo nombre, distinto uuid). Conservamos la primera (mas antigua,
+  // creada_en asc). Asi el dropdown nunca muestra "PSUV PSUV PSUV".
   const [oficinas, setOficinas] = useState([])
   useEffect(() => {
     let cancelado = false
-    supabase.from('oficinas').select('id, nombre, direccion, latitud, longitud, radio_metros, activa')
-      .order('nombre')
+    supabase.from('oficinas').select('id, nombre, direccion, latitud, longitud, radio_metros, activa, creada_en')
+      .order('creada_en', { ascending: true })
       .then(({ data }) => {
-        if (!cancelado) setOficinas((data || []).filter(o => o.activa !== false))
+        if (cancelado) return
+        const vistos = new Set()
+        const dedupe = (data || []).filter(o => {
+          if (o.activa === false) return false
+          if (vistos.has(o.nombre)) return false
+          vistos.add(o.nombre)
+          return true
+        })
+        // Ordenar alfabeticamente para el select
+        dedupe.sort((a, b) => a.nombre.localeCompare(b.nombre))
+        setOficinas(dedupe)
       })
     return () => { cancelado = true }
   }, [])
