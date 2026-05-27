@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -24,6 +24,9 @@ function App() {
   // Bandera: si el admin acaba de loguearse y aun tiene requiere_cambio_clave=true,
   // bloqueamos el panel y mostramos una pantalla de cambio obligatorio.
   const [debeCambiarClave, setDebeCambiarClave] = useState(false)
+  // Cambio voluntario: cuando el admin abre el modal desde el sidebar
+  // (no es obligatorio, puede cancelar).
+  const [mostrarCambioClave, setMostrarCambioClave] = useState(false)
 
   const isMobile = useIsMobile()
   const [menuAbiertoMobile, setMenuAbiertoMobile] = useState(false)
@@ -285,12 +288,24 @@ function App() {
             {tema === 'oscuro' ? <Sun size={16} /> : <Moon size={16} />}
             Modo {tema === 'oscuro' ? 'claro' : 'oscuro'}
           </button>
+          <button onClick={() => setMostrarCambioClave(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: 10, backgroundColor: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, cursor: 'pointer', fontWeight: 600, marginBottom: 10, fontSize: 13 }}>
+            <KeyRound size={16} /> Cambiar mi clave
+          </button>
           <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 10px 0', textAlign: 'center', wordBreak: 'break-all' }}>Sesion: {sesionActiva.user.email}</p>
           <button onClick={cerrarSesion} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: 'transparent', color: '#f87171', border: '1px solid #f87171', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
             <LogOut size={18} /> Cerrar Sesion
           </button>
         </div>
       </div>
+
+      {mostrarCambioClave && (
+        <CambioObligatorioClave
+          correo={sesionActiva?.user?.email}
+          esVoluntario={true}
+          onListo={() => setMostrarCambioClave(false)}
+          onCancelar={() => setMostrarCambioClave(false)}
+        />
+      )}
 
       {/* CONTENIDO PRINCIPAL — render persistente (todas las vistas se mantienen montadas)
           para que el estado de cada una NO se pierda al cambiar de pestaña. */}
@@ -320,7 +335,7 @@ function App() {
 //   1. updateUser({password}) — cambia la clave en Supabase Auth
 //   2. update administradores_web set requiere_cambio_clave=false — desactiva el gate
 // ============================================================================
-function CambioObligatorioClave({ correo, onListo, onCancelar }) {
+function CambioObligatorioClave({ correo, onListo, onCancelar, esVoluntario = false }) {
   const [clave1, setClave1] = useState('')
   const [clave2, setClave2] = useState('')
   const [error, setError] = useState('')
@@ -357,13 +372,16 @@ function CambioObligatorioClave({ correo, onListo, onCancelar }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', padding: 15, fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,23,42,0.85)', padding: 15, fontFamily: 'system-ui, sans-serif', zIndex: 9999 }}>
       <div style={{ background: 'white', padding: 32, borderRadius: 16, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.4)' }}>
-        <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', borderLeft: '4px solid #d97706', padding: 12, borderRadius: 8, marginBottom: 20, fontSize: 13, color: '#78350f', fontWeight: 600, lineHeight: 1.5 }}>
-          🔒 <strong>Cambio de clave obligatorio.</strong> Esta es tu primera vez en el panel. Por seguridad, debes definir una clave propia antes de continuar.
+        <div style={{ background: esVoluntario ? '#dbeafe' : '#fef3c7', border: `1px solid ${esVoluntario ? '#60a5fa' : '#fbbf24'}`, borderLeft: `4px solid ${esVoluntario ? '#2563eb' : '#d97706'}`, padding: 12, borderRadius: 8, marginBottom: 20, fontSize: 13, color: esVoluntario ? '#1e3a8a' : '#78350f', fontWeight: 600, lineHeight: 1.5 }}>
+          {esVoluntario
+            ? <>🔑 <strong>Cambiar clave personal.</strong> Define tu nueva clave de acceso al panel. Esta acción no afecta a otros administradores.</>
+            : <>🔒 <strong>Cambio de clave obligatorio.</strong> Esta es tu primera vez en el panel. Por seguridad, debes definir una clave propia antes de continuar.</>
+          }
         </div>
 
-        <h2 style={{ margin: '0 0 6px', color: '#0f172a', fontSize: 20, fontWeight: 900 }}>Define tu nueva clave</h2>
+        <h2 style={{ margin: '0 0 6px', color: '#0f172a', fontSize: 20, fontWeight: 900 }}>{esVoluntario ? 'Cambia tu clave' : 'Define tu nueva clave'}</h2>
         <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13, fontWeight: 600 }}>{correo}</p>
 
         <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -392,7 +410,7 @@ function CambioObligatorioClave({ correo, onListo, onCancelar }) {
 
           <button type="button" onClick={onCancelar} disabled={guardando}
             style={{ padding: 10, background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Cerrar sesión y volver al login
+            {esVoluntario ? 'Cancelar' : 'Cerrar sesión y volver al login'}
           </button>
         </form>
       </div>
