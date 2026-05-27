@@ -320,7 +320,11 @@ function ModalEditarAsistencia({ tipo, registro, empleado, adminEmail, onCerrar,
         registroId = registro.id
         valorNuevo = `entrada=${horaEntradaFinal || '--'} | salida=${horaSalidaFinal || '--'}`
       } else {
-        // Marca manual: lat/lon = 0 indica que no vino del GPS de la app
+        // Marca manual: lat/lon = 0 indica que no vino del GPS de la app.
+        // device_id se manda explicitamente como 'WEB_ADMIN_MANUAL' por
+        // consistencia — antes lo omitiamos y eso podia romper la decodificacion
+        // del historial en algunas versiones viejas de la app Android (campo
+        // declarado no-nullable).
         const { data: insData, error: insErr } = await supabase
           .from('asistencia_registros')
           .insert({
@@ -330,6 +334,7 @@ function ModalEditarAsistencia({ tipo, registro, empleado, adminEmail, onCerrar,
             hora_salida: horaSalidaFinal,
             latitud: 0,
             longitud: 0,
+            device_id: 'WEB_ADMIN_MANUAL',
             network_type: 'MANUAL_ADMIN'
           })
           .select('id')
