@@ -25,11 +25,11 @@ export default function Empleados() {
 
   // Catalogos para los selects. Si necesitas agregar mas opciones, edita estos
   // arrays. La opcion preseleccionada es siempre la primera.
-  // Sala Situacional y Chofer van al inicio porque son los departamentos
-  // de los empleados ya cargados (no romper el select de empleados existentes).
+  // Sala Situacional va al inicio porque es el departamento de la mayoria
+  // de empleados ya cargados (no romper el select).
+  // Chofer NO esta aqui — Chofer es un CARGO, no un departamento.
   const OPCIONES_DEPARTAMENTOS = [
     'Sala Situacional',
-    'Chofer',
     'CASA DE LA MUJER Y LA FAMILIA',
     'SECRETARIA COORDINADORA DE TRANSPORTE, VIALIDAD Y MOVILIDAD',
     'DIR. TRANSP Y VIAL',
@@ -84,7 +84,7 @@ export default function Empleados() {
     'DIRECCION FORTALECIMIENTO DE PLANES Y PROY. JUVENTUD',
     'DIRECCION DE TURISMO'
   ]
-  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa', 'Informatico']
+  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa', 'Informatico', 'Chofer']
 
   // Estados para los campos de texto estándar (valores por defecto = mas comun)
   const [formulario, setFormulario] = useState({
