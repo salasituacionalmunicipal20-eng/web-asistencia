@@ -655,14 +655,14 @@ export default function Empleados() {
                 </tr>
               ))}
               {cargandoLista && listaEmpleados.length === 0 && (
-                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando listado...</td></tr>
+                <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando listado...</td></tr>
               )}
               {!cargandoLista && errorLista && (
-                <tr><td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
+                <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
               )}
               {!cargandoLista && !errorLista && listaEmpleados.length === 0 && (
                 <tr>
-                  <td colSpan="5" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
+                  <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
                 </tr>
               )}
             </tbody>
