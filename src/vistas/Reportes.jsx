@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../supabase'
-import { BookOpen, Download, Search, UserCheck, Calendar, Clock, AlertCircle, BarChart3, UserX, Award, FileSpreadsheet } from 'lucide-react'
+import { BookOpen, Download, Search, UserCheck, Calendar, Clock, AlertCircle, BarChart3, UserX, Award, FileSpreadsheet, Pencil, Plus, X, Save } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -66,6 +66,14 @@ function PanelExpediente() {
   const [busqueda, setBusqueda] = useState('')
   const [filtroDepto, setFiltroDepto] = useState('')
   const [empleadoSel, setEmpleadoSel] = useState(null)
+  // modal de edicion/creacion manual de un registro de asistencia
+  // shape: { tipo: 'editar'|'crear', registro: {...}|null }
+  const [modalReg, setModalReg] = useState(null)
+  const [miCorreo, setMiCorreo] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMiCorreo(data?.user?.email || ''))
+  }, [])
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -109,7 +117,8 @@ function PanelExpediente() {
     if (!empleadoSel) return []
     const d = indice.get(empleadoSel.cedula) || { asis: [], just: [], vac: [] }
     const items = []
-    d.asis.forEach(a => items.push({ tipo: 'Asistencia', fecha: a.fecha, detalle: `Entrada: ${fmtHora(a.hora_entrada)} | Salida: ${fmtHora(a.hora_salida)}` }))
+    // Mantenemos el registro original en el item para poder editarlo
+    d.asis.forEach(a => items.push({ tipo: 'Asistencia', fecha: a.fecha, detalle: `Entrada: ${fmtHora(a.hora_entrada)} | Salida: ${fmtHora(a.hora_salida)}`, registro: a }))
     d.just.forEach(j => items.push({ tipo: 'Justificacion', fecha: String(j.fecha_falta).substring(0, 10), detalle: `${j.motivo} | Estado: ${j.estado}` }))
     d.vac.forEach(v => items.push({ tipo: 'Vacaciones', fecha: v.fecha_inicio, detalle: `Hasta ${v.fecha_fin} | ${v.motivo} | Estado: ${v.estado}` }))
     return items.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
@@ -210,17 +219,33 @@ function PanelExpediente() {
         <div style={{ flex: 2, backgroundColor: t.bgPanel, padding: 20, borderRadius: 14, border: `1px solid ${t.border}` }}>
           {empleadoSel ? (
             <>
-              <h3 style={{ margin: '0 0 16px 0', color: t.text, borderBottom: `2px solid ${t.borderSoft}`, paddingBottom: 12, fontWeight: 900 }}>
-                {empleadoSel.nombres} {empleadoSel.apellidos}
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `2px solid ${t.borderSoft}`, paddingBottom: 12, marginBottom: 16, gap: 10, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, color: t.text, fontWeight: 900 }}>
+                  {empleadoSel.nombres} {empleadoSel.apellidos}
+                </h3>
+                <button onClick={() => setModalReg({ tipo: 'crear', registro: null })}
+                  title="Crear manualmente una marca para una fecha que no tiene registro"
+                  style={{ padding: '8px 14px', backgroundColor: t.exito, color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <Plus size={14} /> Agregar marca manual
+                </button>
+              </div>
               <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                 {historial.map((h, i) => (
                   <div key={i} style={{ marginBottom: 10, padding: 12, borderRadius: 10, borderLeft: `4px solid ${h.tipo === 'Asistencia' ? t.exito : h.tipo === 'Justificacion' ? t.aviso : t.info}`, backgroundColor: t.bgInput }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'center' }}>
                       <span style={{ fontSize: 11, fontWeight: 800, color: t.textSoft, display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Calendar size={12} /> {h.fecha}
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 900, padding: '2px 8px', borderRadius: 12, backgroundColor: h.tipo === 'Asistencia' ? t.exitoBg : h.tipo === 'Justificacion' ? t.avisoBg : t.infoBg, color: h.tipo === 'Asistencia' ? t.exito : h.tipo === 'Justificacion' ? t.aviso : t.info, textTransform: 'uppercase' }}>{h.tipo}</span>
+                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                        {h.tipo === 'Asistencia' && h.registro && (
+                          <button onClick={() => setModalReg({ tipo: 'editar', registro: h.registro })}
+                            title="Corregir hora de entrada o salida"
+                            style={{ padding: '3px 8px', backgroundColor: t.primarioBg, color: t.primario, border: `1px solid ${t.primario}`, borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Pencil size={11} /> Editar
+                          </button>
+                        )}
+                        <span style={{ fontSize: 10, fontWeight: 900, padding: '2px 8px', borderRadius: 12, backgroundColor: h.tipo === 'Asistencia' ? t.exitoBg : h.tipo === 'Justificacion' ? t.avisoBg : t.infoBg, color: h.tipo === 'Asistencia' ? t.exito : h.tipo === 'Justificacion' ? t.aviso : t.info, textTransform: 'uppercase' }}>{h.tipo}</span>
+                      </div>
                     </div>
                     <div style={{ color: t.text, fontSize: 13, fontWeight: 600 }}>{h.detalle}</div>
                   </div>
@@ -236,7 +261,162 @@ function PanelExpediente() {
           )}
         </div>
       </div>
+
+      {modalReg && empleadoSel && (
+        <ModalEditarAsistencia
+          tipo={modalReg.tipo}
+          registro={modalReg.registro}
+          empleado={empleadoSel}
+          adminEmail={miCorreo}
+          onCerrar={() => setModalReg(null)}
+          onGuardado={() => { setModalReg(null); cargar() }}
+        />
+      )}
     </>
+  )
+}
+
+// ============================================================================
+// Modal de edicion / creacion manual de un registro de asistencia
+// ----------------------------------------------------------------------------
+// - Tipo 'editar': UPDATE en asistencia_registros por id
+// - Tipo 'crear':  INSERT en asistencia_registros (lat/lon = 0 marca manual)
+// En ambos casos guarda fila en auditoria con el motivo escrito por el admin.
+// ============================================================================
+function ModalEditarAsistencia({ tipo, registro, empleado, adminEmail, onCerrar, onGuardado }) {
+  const { t } = useTema()
+  const esEditar = tipo === 'editar'
+  const hoyIso = new Date().toISOString().substring(0, 10)
+
+  const [fecha, setFecha] = useState(esEditar ? registro.fecha : hoyIso)
+  const [horaEntrada, setHoraEntrada] = useState(esEditar ? String(registro.hora_entrada || '').substring(0, 5) : '')
+  const [horaSalida, setHoraSalida] = useState(esEditar ? String(registro.hora_salida || '').substring(0, 5) : '')
+  const [motivo, setMotivo] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+
+  const guardar = async () => {
+    setError('')
+    if (!horaEntrada && !horaSalida) {
+      setError('Debes indicar al menos la hora de entrada o la de salida.'); return
+    }
+    if (!motivo.trim()) {
+      setError('El motivo es obligatorio para dejar trazabilidad en la auditoría.'); return
+    }
+    setGuardando(true)
+
+    try {
+      let registroId, valorAnterior, valorNuevo
+      const horaEntradaFinal = horaEntrada ? `${horaEntrada}:00` : null
+      const horaSalidaFinal  = horaSalida  ? `${horaSalida}:00`  : null
+
+      if (esEditar) {
+        valorAnterior = `entrada=${registro.hora_entrada || '--'} | salida=${registro.hora_salida || '--'}`
+        const { error: upErr } = await supabase
+          .from('asistencia_registros')
+          .update({ hora_entrada: horaEntradaFinal, hora_salida: horaSalidaFinal })
+          .eq('id', registro.id)
+        if (upErr) throw upErr
+        registroId = registro.id
+        valorNuevo = `entrada=${horaEntradaFinal || '--'} | salida=${horaSalidaFinal || '--'}`
+      } else {
+        // Marca manual: lat/lon = 0 indica que no vino del GPS de la app
+        const { data: insData, error: insErr } = await supabase
+          .from('asistencia_registros')
+          .insert({
+            empleado_id: empleado.cedula,
+            fecha,
+            hora_entrada: horaEntradaFinal,
+            hora_salida: horaSalidaFinal,
+            latitud: 0,
+            longitud: 0,
+            network_type: 'MANUAL_ADMIN'
+          })
+          .select('id')
+          .single()
+        if (insErr) throw insErr
+        registroId = insData.id
+        valorAnterior = 'sin registro'
+        valorNuevo = `entrada=${horaEntradaFinal || '--'} | salida=${horaSalidaFinal || '--'} | fecha=${fecha}`
+      }
+
+      // Auditoria — siempre, tanto en update como en insert
+      await supabase.from('auditoria').insert({
+        tabla: 'asistencia_registros',
+        registro_id: String(registroId),
+        accion: esEditar ? 'EDITAR_MARCA' : 'CREAR_MARCA_MANUAL',
+        campo: `empleado=${empleado.cedula}`,
+        valor_anterior: valorAnterior,
+        valor_nuevo: `${valorNuevo} | motivo=${motivo.trim()}`,
+        usuario_email: adminEmail || 'admin'
+      })
+
+      onGuardado()
+    } catch (e) {
+      setError(e.message || 'No se pudo guardar')
+      setGuardando(false)
+    }
+  }
+
+  const estiloInput = { width: '100%', padding: 11, borderRadius: 8, border: `1px solid ${t.border}`, fontSize: 14, backgroundColor: t.bgInput, color: t.text, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }
+
+  return (
+    <div onClick={(e) => { if (e.target === e.currentTarget) onCerrar() }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: t.bgPanel, borderRadius: 14, padding: 24, maxWidth: 480, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${t.borderSoft}` }}>
+          <h3 style={{ margin: 0, color: t.text, fontSize: 16, fontWeight: 900, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {esEditar ? <Pencil size={18} color={t.primario} /> : <Plus size={18} color={t.exito} />}
+            {esEditar ? 'Editar marca de asistencia' : 'Agregar marca manual'}
+          </h3>
+          <button onClick={onCerrar} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: t.textSoft, padding: 4 }}><X size={20} /></button>
+        </div>
+
+        <div style={{ fontSize: 12, color: t.textSoft, fontWeight: 700, marginBottom: 14 }}>
+          {empleado.nombres} {empleado.apellidos} · <span style={{ color: t.primario }}>{empleado.cedula}</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ gridColumn: esEditar ? '1 / -1' : 'auto' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: t.textSoft, marginBottom: 4, textTransform: 'uppercase' }}>Fecha</label>
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} disabled={esEditar} max={hoyIso} style={{ ...estiloInput, opacity: esEditar ? 0.7 : 1 }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: t.exito, marginBottom: 4, textTransform: 'uppercase' }}>Hora de entrada</label>
+            <input type="time" value={horaEntrada} onChange={e => setHoraEntrada(e.target.value)} style={estiloInput} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: t.aviso, marginBottom: 4, textTransform: 'uppercase' }}>Hora de salida</label>
+            <input type="time" value={horaSalida} onChange={e => setHoraSalida(e.target.value)} style={estiloInput} />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: t.error, marginBottom: 4, textTransform: 'uppercase' }}>
+            Motivo del cambio (obligatorio)
+          </label>
+          <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
+            placeholder="Ej: empleado olvidó marcar entrada, marcó hora equivocada, etc."
+            style={{ ...estiloInput, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ fontSize: 11, color: t.textMuted, marginTop: 4, fontWeight: 600 }}>
+            Queda registrado en la auditoría junto a tu correo ({adminEmail || 'admin'}).
+          </div>
+        </div>
+
+        {error && <div style={{ padding: 10, background: t.errorBg, color: t.error, borderLeft: `3px solid ${t.error}`, borderRadius: 6, fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onCerrar} disabled={guardando}
+            style={{ padding: '10px 16px', background: t.bgInput, color: t.textSoft, border: `1px solid ${t.border}`, borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 13 }}>
+            Cancelar
+          </button>
+          <button onClick={guardar} disabled={guardando}
+            style={{ padding: '10px 16px', background: esEditar ? t.primario : t.exito, color: 'white', border: 'none', borderRadius: 8, cursor: guardando ? 'wait' : 'pointer', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: guardando ? 0.7 : 1 }}>
+            <Save size={14} /> {guardando ? 'Guardando...' : (esEditar ? 'Guardar cambios' : 'Crear marca')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
