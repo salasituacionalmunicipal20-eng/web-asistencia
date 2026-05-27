@@ -8,7 +8,7 @@ export async function verificarAdmin(email) {
 
   const { data, error } = await supabase
     .from('administradores_web')
-    .select('correo, nombre, activo')
+    .select('correo, nombre, activo, requiere_cambio_clave')
     .eq('correo', email)
     .maybeSingle()
 
@@ -34,5 +34,11 @@ export async function verificarAdmin(email) {
     }
   }
 
-  return { admin: true, nombre: data.nombre }
+  // requiere_cambio_clave: si la columna no existe (migracion vieja) el campo
+  // viene undefined -> lo tratamos como false para no bloquear.
+  return {
+    admin: true,
+    nombre: data.nombre,
+    requiereCambioClave: data.requiere_cambio_clave === true
+  }
 }

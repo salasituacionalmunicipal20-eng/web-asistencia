@@ -21,6 +21,9 @@ function App() {
   const [sesionActiva, setSesionActiva] = useState(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
   const [vistaActual, setVistaActual] = useState('dashboard')
+  // Bandera: si el admin acaba de loguearse y aun tiene requiere_cambio_clave=true,
+  // bloqueamos el panel y mostramos una pantalla de cambio obligatorio.
+  const [debeCambiarClave, setDebeCambiarClave] = useState(false)
 
   const isMobile = useIsMobile()
   const [menuAbiertoMobile, setMenuAbiertoMobile] = useState(false)
@@ -35,15 +38,18 @@ function App() {
   const validarSesionAdmin = useCallback(async (session) => {
     if (!session) {
       setSesionActiva(null)
+      setDebeCambiarClave(false)
       return
     }
-    const { admin, motivo } = await verificarAdmin(session.user.email)
+    const { admin, motivo, requiereCambioClave } = await verificarAdmin(session.user.email)
     if (admin) {
       setSesionActiva(session)
+      setDebeCambiarClave(!!requiereCambioClave)
     } else {
       // No autorizado: lo sacamos y dejamos el mensaje en la pantalla de login
       await supabase.auth.signOut().catch(() => {})
       setSesionActiva(null)
+      setDebeCambiarClave(false)
       setErrorLogin(`⛔ ${motivo} Esta plataforma es solo para administradores.`)
     }
   }, [])
@@ -185,6 +191,19 @@ function App() {
     )
   }
 
+  // Bloqueador: si el admin entro con clave inicial, le exigimos cambiarla
+  // antes de mostrar nada del panel. No hay forma de saltarse esto sin cerrar
+  // sesion — la unica salida es definir una clave nueva o hacer logout.
+  if (debeCambiarClave) {
+    return (
+      <CambioObligatorioClave
+        correo={sesionActiva?.user?.email}
+        onListo={() => setDebeCambiarClave(false)}
+        onCancelar={cerrarSesion}
+      />
+    )
+  }
+
   const itemsMenu = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Panel Principal' },
     { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
@@ -288,6 +307,95 @@ function App() {
       </div>
 
       <ModalInactividad segundos={segundosRestantes} onContinuar={reiniciarInactividad} />
+    </div>
+  )
+}
+
+// ============================================================================
+// Pantalla de cambio obligatorio de clave
+// ----------------------------------------------------------------------------
+// Se muestra a pantalla completa (no modal) cuando el admin acaba de loguearse
+// y aun tiene requiere_cambio_clave=true. No hay forma de saltarla: o cambia
+// la clave o cierra sesion.
+//   1. updateUser({password}) — cambia la clave en Supabase Auth
+//   2. update administradores_web set requiere_cambio_clave=false — desactiva el gate
+// ============================================================================
+function CambioObligatorioClave({ correo, onListo, onCancelar }) {
+  const [clave1, setClave1] = useState('')
+  const [clave2, setClave2] = useState('')
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
+
+  const guardar = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    if (clave1.length < 8) { setError('La nueva clave debe tener al menos 8 caracteres.'); return }
+    if (clave1 !== clave2)  { setError('Las dos claves no coinciden.'); return }
+    if (!/[A-Z]/.test(clave1) || !/[a-z]/.test(clave1) || !/[0-9]/.test(clave1)) {
+      setError('La clave debe combinar mayúsculas, minúsculas y al menos un número.'); return
+    }
+
+    setGuardando(true)
+    try {
+      const { error: authErr } = await supabase.auth.updateUser({ password: clave1 })
+      if (authErr) throw authErr
+
+      const { error: dbErr } = await supabase
+        .from('administradores_web')
+        .update({ requiere_cambio_clave: false })
+        .eq('correo', correo)
+      // No reventamos si el update falla (RLS, columna ausente) — el cambio
+      // de clave en Auth ya esta hecho. Solo logueamos.
+      if (dbErr) console.warn('No se pudo desactivar el flag:', dbErr)
+
+      onListo()
+    } catch (e) {
+      setError(e.message || 'No se pudo cambiar la clave.')
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', padding: 15, fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ background: 'white', padding: 32, borderRadius: 16, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.4)' }}>
+        <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', borderLeft: '4px solid #d97706', padding: 12, borderRadius: 8, marginBottom: 20, fontSize: 13, color: '#78350f', fontWeight: 600, lineHeight: 1.5 }}>
+          🔒 <strong>Cambio de clave obligatorio.</strong> Esta es tu primera vez en el panel. Por seguridad, debes definir una clave propia antes de continuar.
+        </div>
+
+        <h2 style={{ margin: '0 0 6px', color: '#0f172a', fontSize: 20, fontWeight: 900 }}>Define tu nueva clave</h2>
+        <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13, fontWeight: 600 }}>{correo}</p>
+
+        <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>Nueva clave</label>
+            <input type="password" value={clave1} onChange={e => setClave1(e.target.value)} required minLength={8}
+              autoFocus autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres, mayúsc + minúsc + número"
+              style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 15, color: '#0f172a', background: 'white', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>Repite la nueva clave</label>
+            <input type="password" value={clave2} onChange={e => setClave2(e.target.value)} required minLength={8}
+              autoComplete="new-password"
+              style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 15, color: '#0f172a', background: 'white', boxSizing: 'border-box' }} />
+          </div>
+
+          {error && (
+            <div style={{ padding: 10, borderRadius: 6, background: '#fee2e2', color: '#991b1b', borderLeft: '3px solid #dc2626', fontSize: 13, fontWeight: 700 }}>{error}</div>
+          )}
+
+          <button type="submit" disabled={guardando}
+            style={{ padding: 14, background: '#0284c7', color: 'white', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: guardando ? 'wait' : 'pointer', opacity: guardando ? 0.7 : 1, marginTop: 4 }}>
+            {guardando ? 'Guardando...' : 'Cambiar clave y entrar al panel'}
+          </button>
+
+          <button type="button" onClick={onCancelar} disabled={guardando}
+            style={{ padding: 10, background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            Cerrar sesión y volver al login
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

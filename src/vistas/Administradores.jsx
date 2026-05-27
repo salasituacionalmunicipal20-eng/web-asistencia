@@ -81,10 +81,12 @@ export default function Administradores() {
       })
       if (signupErr) throw signupErr
 
-      // 2. Agregar a la tabla administradores_web (whitelist)
+      // 2. Agregar a la tabla administradores_web (whitelist).
+      // requiere_cambio_clave: true obliga al nuevo admin a cambiar la clave
+      // la primera vez que entre — la clave inicial la fijaste tu, no es de el.
       const { error: insertErr } = await supabase
         .from('administradores_web')
-        .insert({ correo, nombre, activo: true })
+        .insert({ correo, nombre, activo: true, requiere_cambio_clave: true })
       if (insertErr) throw insertErr
 
       // 3. Cerrar el cliente secundario para no dejarlo colgado

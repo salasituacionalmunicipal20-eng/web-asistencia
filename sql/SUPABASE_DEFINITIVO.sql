@@ -73,6 +73,11 @@ CREATE POLICY "Permitir_Todo_Asistencia" ON asistencia_registros FOR ALL USING (
 
 -- ============================================================================
 -- 3. ADMINISTRADORES WEB
+-- ----------------------------------------------------------------------------
+-- FIX 1: la politica anterior era SOLO SELECT, lo que bloqueaba el INSERT/
+--        UPDATE/DELETE del panel "Administradores". Ahora es FOR ALL.
+-- FIX 2: columna requiere_cambio_clave para obligar al nuevo admin a cambiar
+--        la clave inicial la primera vez que entre al panel.
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS administradores_web (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -81,12 +86,19 @@ CREATE TABLE IF NOT EXISTS administradores_web (
     activo boolean DEFAULT true,
     fecha_creacion timestamp with time zone DEFAULT now()
 );
-ALTER TABLE administradores_web ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Permitir_Lectura_Admins" ON administradores_web;
-CREATE POLICY "Permitir_Lectura_Admins" ON administradores_web FOR SELECT USING (true);
+-- Columna nueva (idempotente). default true asi cualquier admin existente
+-- que no haya cambiado clave queda obligado en su proximo login.
+ALTER TABLE administradores_web ADD COLUMN IF NOT EXISTS requiere_cambio_clave boolean DEFAULT true;
 
-INSERT INTO administradores_web (correo, nombre, activo)
-VALUES ('carlos.linares.es@gmail.com', 'Carlos Linares', true)
+ALTER TABLE administradores_web ENABLE ROW LEVEL SECURITY;
+-- Limpia politicas viejas (cualquier nombre) y deja una FOR ALL
+DROP POLICY IF EXISTS "Permitir_Lectura_Admins" ON administradores_web;
+DROP POLICY IF EXISTS "Permitir_Todo_Admins" ON administradores_web;
+CREATE POLICY "Permitir_Todo_Admins" ON administradores_web FOR ALL USING (true) WITH CHECK (true);
+
+-- Carlos Linares es el admin raiz — NO le exigimos cambio obligatorio.
+INSERT INTO administradores_web (correo, nombre, activo, requiere_cambio_clave)
+VALUES ('carlos.linares.es@gmail.com', 'Carlos Linares', true, false)
 ON CONFLICT (correo) DO UPDATE SET activo = EXCLUDED.activo;
 
 
