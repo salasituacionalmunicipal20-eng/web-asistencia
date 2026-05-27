@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -15,6 +15,7 @@ import Configuracion from './vistas/Configuracion'
 import Vacaciones from './vistas/Vacaciones'
 import Auditoria from './vistas/Auditoria'
 import Administradores from './vistas/Administradores'
+import VersionesApp from './vistas/VersionesApp'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
@@ -207,6 +208,9 @@ function App() {
     )
   }
 
+  // Super-admin: solo Carlos puede ver el panel de versiones de app por empleado.
+  const esSuperAdmin = sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
+
   const itemsMenu = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Panel Principal' },
     { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
@@ -216,6 +220,8 @@ function App() {
     { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
     { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
     { id: 'administradores', icon: UserCog, label: 'Administradores' },
+    // Solo visible para super-admin
+    ...(esSuperAdmin ? [{ id: 'versiones', icon: Smartphone, label: 'Versiones App' }] : []),
     { id: 'configuracion', icon: Settings, label: 'Configuracion' },
   ]
 
@@ -318,6 +324,9 @@ function App() {
         <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
+        {esSuperAdmin && (
+          <div style={{ display: vistaActual === 'versiones' ? 'block' : 'none' }}><VersionesApp /></div>
+        )}
         <div style={{ display: vistaActual === 'configuracion' ? 'block' : 'none' }}><Configuracion /></div>
       </div>
 
