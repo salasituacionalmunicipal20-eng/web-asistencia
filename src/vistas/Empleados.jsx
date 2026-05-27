@@ -94,8 +94,22 @@ export default function Empleados() {
     departamento: OPCIONES_DEPARTAMENTOS[0],
     cargo: OPCIONES_CARGOS[0],
     tolerancia_minutos: 15,
-    fecha_cumpleanos: ''
+    fecha_cumpleanos: '',
+    oficina_id: ''  // sede / lugar de trabajo asignado (geofence)
   })
+
+  // Lugares de trabajo (sedes) — se carga de la tabla `oficinas` y alimenta
+  // el select del form. Solo lugares activos.
+  const [oficinas, setOficinas] = useState([])
+  useEffect(() => {
+    let cancelado = false
+    supabase.from('oficinas').select('id, nombre, direccion, latitud, longitud, radio_metros, activa')
+      .order('nombre')
+      .then(({ data }) => {
+        if (!cancelado) setOficinas((data || []).filter(o => o.activa !== false))
+      })
+    return () => { cancelado = true }
+  }, [])
 
   // Default horario: 7:00 AM - 5:00 PM. El usuario puede cambiarlo en cada alta.
   const [entHora, setEntHora] = useState('07')
@@ -297,7 +311,8 @@ export default function Empleados() {
       departamento: empleado.departamento,
       cargo: empleado.cargo,
       tolerancia_minutos: empleado.tolerancia_minutos,
-      fecha_cumpleanos: empleado.fecha_cumpleanos || ''
+      fecha_cumpleanos: empleado.fecha_cumpleanos || '',
+      oficina_id: empleado.oficina_id || ''
     })
 
     const entrada = desglosarHoraA12h(empleado.hora_entrada)
@@ -321,7 +336,8 @@ export default function Empleados() {
       departamento: OPCIONES_DEPARTAMENTOS[0],
       cargo: OPCIONES_CARGOS[0],
       tolerancia_minutos: 15,
-      fecha_cumpleanos: ''
+      fecha_cumpleanos: '',
+      oficina_id: ''
     })
     setEntHora('07')
     setEntMinuto('00')
@@ -347,6 +363,8 @@ export default function Empleados() {
       hora_salida: horaSalidaFinal,
       // Null si esta vacio, asi la columna queda null (no string vacio que rompe DATE)
       fecha_cumpleanos: formulario.fecha_cumpleanos || null,
+      // oficina_id: '' -> null (no string vacio, eso rompe la FK uuid)
+      oficina_id: formulario.oficina_id || null,
     }
 
     const { error: resultadoError } = editandoId
@@ -492,6 +510,24 @@ export default function Empleados() {
             <input type="date" name="fecha_cumpleanos" value={formulario.fecha_cumpleanos || ''} onChange={manejarCambio} style={{ ...estiloInputBase, borderColor: '#f9a8d4', backgroundColor: '#fdf2f8', color: '#831843' }} />
           </div>
 
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#0369a1', marginBottom: '8px', textTransform: 'uppercase' }}>
+              📍 Lugar de Trabajo (sede con geofence)
+            </label>
+            <select name="oficina_id" value={formulario.oficina_id || ''} onChange={manejarCambio}
+              style={{ ...estiloInputBase, borderColor: '#7dd3fc', backgroundColor: '#f0f9ff', color: '#0c4a6e', fontWeight: 700 }}>
+              <option value="">— Sin sede asignada —</option>
+              {oficinas.map(o => (
+                <option key={o.id} value={o.id}>
+                  {o.nombre} {o.direccion ? `· ${o.direccion}` : ''} (radio {o.radio_metros}m)
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
+              El empleado solo podrá marcar asistencia desde esta sede. Para agregar/editar sedes ve a <strong>Configuración → Sedes / Geofence</strong>.
+            </div>
+          </div>
+
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#1e293b', marginBottom: '8px', textTransform: 'uppercase' }}>
               Hora de Entrada
@@ -555,6 +591,7 @@ export default function Empleados() {
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Nombre Completo</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Dirección / Cargo</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Horario Asignado</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Sede</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>Acción</th>
               </tr>
             </thead>
@@ -581,6 +618,14 @@ export default function Empleados() {
                   <td style={{ padding: '15px 20px', color: '#0f172a', fontWeight: '700' }}>
                     <span style={{ color: '#059669' }}>{String(emp?.hora_entrada || '08:00:00').substring(0,5)}</span> a <span style={{ color: '#0f172a' }}>{String(emp?.hora_salida || '16:00:00').substring(0,5)}</span>
                     <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', fontWeight: '600' }}> (+{emp?.tolerancia_minutos || 0}m gracia)</span>
+                  </td>
+                  <td style={{ padding: '15px 20px', color: '#0c4a6e', fontWeight: '700', fontSize: 13 }}>
+                    {(() => {
+                      const sede = oficinas.find(o => o.id === emp?.oficina_id)
+                      return sede
+                        ? <span title={sede.direccion || ''} style={{ padding: '4px 10px', backgroundColor: '#e0f2fe', borderRadius: 12, fontSize: 11, fontWeight: 800 }}>📍 {sede.nombre}</span>
+                        : <span style={{ color: '#94a3b8', fontWeight: 600, fontSize: 11 }}>Sin asignar</span>
+                    })()}
                   </td>
                   <td style={{ padding: '15px 20px', textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
