@@ -330,7 +330,9 @@ function App() {
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
         {esSuperAdmin && (
           <>
-            <div style={{ display: vistaActual === 'radar' ? 'block' : 'none' }}><RadarVista /></div>
+            {/* Radar se monta/desmonta (no display:none) porque Leaflet
+                calcula dimensiones erroneas si su padre arranca oculto. */}
+            {vistaActual === 'radar' && <RadarVista />}
             <div style={{ display: vistaActual === 'versiones' ? 'block' : 'none' }}><VersionesApp /></div>
           </>
         )}

@@ -6,6 +6,27 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-le
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+/**
+ * Componente helper que dispara invalidateSize() del mapa de Leaflet cuando
+ * el contenedor cambia de tamaño o cuando hacemos resize de ventana. Sin
+ * esto, si el mapa se monta dentro de un padre con display:none o con un
+ * tamaño no definido todavía, queda cortado (mosaicos en gris).
+ */
+function MapaAutoResize({ trigger }) {
+  const map = useMap()
+  useEffect(() => {
+    // Pequeño delay para que el DOM termine de pintar
+    const id = setTimeout(() => map.invalidateSize(), 50)
+    return () => clearTimeout(id)
+  }, [trigger, map])
+  useEffect(() => {
+    const onResize = () => map.invalidateSize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [map])
+  return null
+}
+
 // Fix de los iconos por defecto de Leaflet (Webpack no los resuelve solo)
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -161,8 +182,9 @@ export default function Radar() {
       </div>
 
       {/* MAPA */}
-      <div style={{ backgroundColor: t.bgPanel, borderRadius: 14, border: `1px solid ${t.border}`, overflow: 'hidden', height: 520, position: 'relative' }}>
-        <MapContainer center={centro} zoom={16} style={{ height: '100%', width: '100%' }}>
+      <div style={{ backgroundColor: t.bgPanel, borderRadius: 14, border: `1px solid ${t.border}`, overflow: 'hidden', height: '70vh', minHeight: 480, position: 'relative' }}>
+        <MapContainer center={centro} zoom={16} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true}>
+          <MapaAutoResize trigger={empleados.length} />
           <TileLayer
             attribution='&copy; OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
