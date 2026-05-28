@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff, Eye, AlertTriangle, Copy } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
@@ -139,6 +139,32 @@ export default function Empleados() {
   const archivoFotoRef = useRef(null)
   const [importandoCSV, setImportandoCSV] = useState(false)
   const [empleadoFoto, setEmpleadoFoto] = useState(null)
+
+  // Super-admin gate para el boton "Ver clave". Solo Carlos.
+  const [esSuperAdmin, setEsSuperAdmin] = useState(false)
+  const [miCorreo, setMiCorreo] = useState('')
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const correo = data?.user?.email || ''
+      setMiCorreo(correo)
+      setEsSuperAdmin(correo === 'carlos.linares.es@gmail.com')
+    })
+  }, [])
+
+  // Modal de ver clave
+  const [verClaveModal, setVerClaveModal] = useState(null) // { cedula, nombre, clave, cargando, error }
+  const verClaveDe = async (emp) => {
+    setVerClaveModal({ cedula: emp.cedula, nombre: `${emp.nombres} ${emp.apellidos}`, clave: null, cargando: true, error: null })
+    const { data, error } = await supabase.rpc('obtener_clave_empleado', {
+      p_cedula: emp.cedula,
+      p_admin_email: miCorreo
+    })
+    if (error) {
+      setVerClaveModal(m => ({ ...m, cargando: false, error: error.message }))
+    } else {
+      setVerClaveModal(m => ({ ...m, cargando: false, clave: data, error: null }))
+    }
+  }
 
   // --------------------------------------------------------------------
   // ACTIVAR/DESACTIVAR empleado (soft delete via toggle activo)
@@ -645,6 +671,12 @@ export default function Empleados() {
                       <button onClick={() => activarModoEdicion(emp)}    title="Editar"    style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Pencil size={12} /> Editar</button>
                       <button onClick={() => abrirSelectorFoto(emp.cedula)} title="Subir foto" style={{ padding: '6px 10px', backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Camera size={12} /> Foto</button>
                       <button onClick={() => resetearClave(emp.cedula)}   title="Resetear clave" style={{ padding: '6px 10px', backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><KeyRound size={12} /> Clave</button>
+                      {esSuperAdmin && (
+                        <button onClick={() => verClaveDe(emp)} title="Ver clave actual (solo super-admin)"
+                          style={{ padding: '6px 10px', backgroundColor: '#ede9fe', color: '#5b21b6', border: '1px solid #c4b5fd', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Eye size={12} /> Ver
+                        </button>
+                      )}
                       {emp.activo !== false ? (
                         <button onClick={() => toggleActivo(emp.cedula, false)} title="Desactivar" style={{ padding: '6px 10px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><PowerOff size={12} /></button>
                       ) : (
@@ -669,6 +701,66 @@ export default function Empleados() {
           </table>
         </div>
       </div>
+
+      {/* MODAL VER CLAVE — solo super-admin */}
+      {verClaveModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setVerClaveModal(null) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 14, padding: 24, maxWidth: 460, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, display: 'inline-flex', alignItems: 'center', gap: 8, color: '#5b21b6' }}>
+                <Eye size={20} /> Clave actual del empleado
+              </h3>
+              <button onClick={() => setVerClaveModal(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', borderLeft: '4px solid #d97706', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 12, color: '#78350f', fontWeight: 600, display: 'flex', gap: 8 }}>
+              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <strong>Información confidencial.</strong> Esta acción queda registrada en la auditoría con tu correo. No compartas esta clave con terceros ni la guardes fuera del sistema.
+              </div>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#475569', fontWeight: 700, marginBottom: 4 }}>{verClaveModal.nombre}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>{verClaveModal.cedula}</div>
+
+            {verClaveModal.cargando ? (
+              <div style={{ padding: 30, textAlign: 'center', color: '#64748b', fontWeight: 600 }}>Descifrando...</div>
+            ) : verClaveModal.error ? (
+              <div style={{ padding: 12, background: '#fef2f2', color: '#991b1b', borderLeft: '3px solid #dc2626', borderRadius: 6, fontWeight: 700, fontSize: 13 }}>
+                ⛔ {verClaveModal.error}
+              </div>
+            ) : verClaveModal.clave === null ? (
+              <div style={{ padding: 14, background: '#f1f5f9', color: '#475569', borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+                ⚠️ <strong>Clave no disponible.</strong> Este empleado tenía su clave antes de habilitar el registro reversible.
+                Para verla, debes resetearle la clave con el botón <strong>"Clave"</strong>. La próxima vez que el empleado entre o cambie su clave, podrás verla aquí.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Clave actual</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
+                  <code style={{ flex: 1, padding: '14px 16px', backgroundColor: '#0f172a', color: '#f1f5f9', borderRadius: 8, fontSize: 18, fontWeight: 800, fontFamily: 'monospace', letterSpacing: 1, textAlign: 'center', wordBreak: 'break-all' }}>
+                    {verClaveModal.clave}
+                  </code>
+                  <button onClick={() => { navigator.clipboard.writeText(verClaveModal.clave); alert('Clave copiada al portapapeles') }}
+                    title="Copiar al portapapeles"
+                    style={{ padding: 12, backgroundColor: '#5b21b6', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Copy size={16} />
+                  </button>
+                </div>
+              </>
+            )}
+
+            <button onClick={() => setVerClaveModal(null)}
+              style={{ width: '100%', padding: 12, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
