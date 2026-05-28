@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -16,6 +16,7 @@ import Vacaciones from './vistas/Vacaciones'
 import Auditoria from './vistas/Auditoria'
 import Administradores from './vistas/Administradores'
 import VersionesApp from './vistas/VersionesApp'
+import RadarVista from './vistas/Radar'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
@@ -221,7 +222,10 @@ function App() {
     { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
     { id: 'administradores', icon: UserCog, label: 'Administradores' },
     // Solo visible para super-admin
-    ...(esSuperAdmin ? [{ id: 'versiones', icon: Smartphone, label: 'Versiones App' }] : []),
+    ...(esSuperAdmin ? [
+      { id: 'radar', icon: Radio, label: 'Radar tiempo real' },
+      { id: 'versiones', icon: Smartphone, label: 'Versiones App' }
+    ] : []),
     { id: 'configuracion', icon: Settings, label: 'Configuracion' },
   ]
 
@@ -325,7 +329,10 @@ function App() {
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
         {esSuperAdmin && (
-          <div style={{ display: vistaActual === 'versiones' ? 'block' : 'none' }}><VersionesApp /></div>
+          <>
+            <div style={{ display: vistaActual === 'radar' ? 'block' : 'none' }}><RadarVista /></div>
+            <div style={{ display: vistaActual === 'versiones' ? 'block' : 'none' }}><VersionesApp /></div>
+          </>
         )}
         <div style={{ display: vistaActual === 'configuracion' ? 'block' : 'none' }}><Configuracion /></div>
       </div>
