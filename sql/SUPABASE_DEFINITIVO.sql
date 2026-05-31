@@ -434,4 +434,132 @@ SELECT
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='importar_empleado')       AS rpc_importar_empleado,
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='resetear_clave_empleado') AS rpc_resetear,
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_cumpleanos')   AS rpc_cumpleanos,
-    EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy')           AS vw_kpis;
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='reportar_version_app')    AS rpc_reportar_version,
+    EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy')           AS vw_kpis,
+    EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_versiones_app')      AS vw_versiones,
+    EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='app_versiones') AS tabla_app_versiones;
+
+
+-- ============================================================================
+-- 13. APP_VERSIONES — distribucion de updates in-app del APK
+-- ============================================================================
+-- Tabla unica (id=1) con la version vigente del APK. La app la consulta cada
+-- 4 horas (y al abrirse) y, si su versionCode local es menor, ofrece descargar
+-- el APK desde apk_url.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS app_versiones (
+    id                int PRIMARY KEY DEFAULT 1,
+    version_codigo    int NOT NULL,                            -- = build.gradle versionCode
+    version_nombre    text NOT NULL,                           -- = build.gradle versionName
+    apk_url           text NOT NULL,                           -- URL publica al APK
+    notas             text,                                    -- changelog corto mostrado en dialog
+    obligatoria       boolean NOT NULL DEFAULT false,          -- si true, no se puede posponer
+    fecha_publicacion timestamp with time zone DEFAULT now(),
+    CONSTRAINT app_versiones_unica CHECK (id = 1)
+);
+
+ALTER TABLE app_versiones ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Lectura_Versiones"   ON app_versiones;
+DROP POLICY IF EXISTS "Permitir_Escritura_Versiones" ON app_versiones;
+CREATE POLICY "Permitir_Lectura_Versiones"   ON app_versiones FOR SELECT USING (true);
+CREATE POLICY "Permitir_Escritura_Versiones" ON app_versiones FOR ALL    USING (true) WITH CHECK (true);
+
+-- Insert inicial defensivo. Si la fila ya existe, NO la pisa: el UPDATE
+-- final de la seccion 15 es el que manda la version vigente.
+INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
+VALUES (
+    1,
+    1,
+    '1.0.0',
+    'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
+    'Version inicial.',
+    false
+) ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 14. TRACKING DE VERSION POR EMPLEADO + vista para super-admin
+-- ============================================================================
+-- Cada vez que el empleado abre la app, la app llama a reportar_version_app
+-- y rellena estas 3 columnas en su fila de empleados. La vista vw_versiones_app
+-- permite al panel del super-admin ver quien esta al dia y quien no.
+-- ============================================================================
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_version_nombre text;
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_version_codigo int;
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_ultimo_ping    timestamp with time zone;
+
+DROP FUNCTION IF EXISTS public.reportar_version_app(text, text, int);
+CREATE OR REPLACE FUNCTION public.reportar_version_app(
+    p_cedula         text,
+    p_version_nombre text,
+    p_version_codigo int
+)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF p_cedula IS NULL OR length(trim(p_cedula)) = 0 THEN RETURN; END IF;
+    UPDATE empleados
+    SET app_version_nombre = p_version_nombre,
+        app_version_codigo = p_version_codigo,
+        app_ultimo_ping    = NOW()
+    WHERE cedula = upper(trim(p_cedula));
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.reportar_version_app(text, text, int) TO anon, authenticated;
+
+CREATE OR REPLACE VIEW vw_versiones_app AS
+SELECT
+    e.cedula, e.nombres, e.apellidos, e.departamento, e.cargo, e.activo,
+    e.app_version_nombre, e.app_version_codigo, e.app_ultimo_ping,
+    CASE WHEN e.app_ultimo_ping IS NULL THEN NULL
+         ELSE EXTRACT(EPOCH FROM (NOW() - e.app_ultimo_ping)) / 86400
+    END AS dias_desde_ping,
+    (SELECT version_codigo FROM app_versiones WHERE id = 1) AS version_actual_codigo,
+    (SELECT version_nombre FROM app_versiones WHERE id = 1) AS version_actual_nombre,
+    CASE
+        WHEN e.app_version_codigo IS NULL THEN 'NUNCA_ABRIO'
+        WHEN e.app_version_codigo >= (SELECT version_codigo FROM app_versiones WHERE id = 1) THEN 'AL_DIA'
+        ELSE 'DESACTUALIZADO'
+    END AS estado_version
+FROM empleados e
+WHERE COALESCE(e.activo, true) = true
+ORDER BY estado_version, e.apellidos, e.nombres;
+
+GRANT SELECT ON vw_versiones_app TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ============================================================================
+-- 15. ANUNCIO DE RELEASE — version vigente del APK
+-- ============================================================================
+-- Esta seccion es la unica que cambia con cada release. El UPDATE final
+-- determina que version pedira la app. Bumpear version_codigo + version_nombre
+-- aqui es lo que dispara que TODOS los telefonos vean la actualizacion en su
+-- proximo chequeo (<= 4 horas).
+--
+-- Workflow para publicar:
+--   1. Bumpear versionCode + versionName en app/build.gradle.kts
+--   2. ./gradlew assembleRelease (con JAVA_HOME del JBR de Android Studio)
+--   3. Copiar app-release.apk a web-asistencia/public/AlcaldiaControlAcceso.apk
+--   4. npm run deploy (vite build + gh-pages)
+--   5. Correr este SQL completo y dejar el UPDATE de abajo con la nueva version
+-- ============================================================================
+UPDATE app_versiones SET
+    version_codigo    = 12,
+    version_nombre    = '1.0.11',
+    apk_url           = 'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
+    notas             = 'Arreglo del cert SSL (ISRG Root X1 embebido) para que telefonos viejos como Alcatel 5059S con Android 8.1 puedan conectar a Supabase.',
+    obligatoria       = false,
+    fecha_publicacion = NOW()
+WHERE id = 1;
+
+-- Si por alguna razon no existe la fila id=1, la creamos
+INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
+SELECT 1, 12, '1.0.11',
+       'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
+       'Arreglo del cert SSL (ISRG Root X1 embebido) para que telefonos viejos como Alcatel 5059S con Android 8.1 puedan conectar a Supabase.',
+       false
+WHERE NOT EXISTS (SELECT 1 FROM app_versiones WHERE id = 1);
+
+-- Verificacion: la version vigente debe quedar 12 / 1.0.11
+SELECT id, version_codigo, version_nombre, apk_url, fecha_publicacion FROM app_versiones;
