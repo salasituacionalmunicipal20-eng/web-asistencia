@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -17,6 +17,7 @@ import Auditoria from './vistas/Auditoria'
 import Administradores from './vistas/Administradores'
 import VersionesApp from './vistas/VersionesApp'
 import RadarVista from './vistas/Radar'
+import Carnets from './vistas/Carnets'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
@@ -215,6 +216,7 @@ function App() {
   const itemsMenu = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Panel Principal' },
     { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
+    { id: 'carnets', icon: IdCard, label: 'Carnets' },
     { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
     { id: 'memos', icon: FileText, label: 'Memorándums' },
     { id: 'reportes', icon: BookOpen, label: 'Reportes' },
@@ -322,6 +324,7 @@ function App() {
       <div style={{ flex: 1, padding: isMobile ? '15px' : '30px', boxSizing: 'border-box', overflowY: 'auto' }}>
         <div style={{ display: vistaActual === 'dashboard' ? 'block' : 'none' }}><PanelPrincipal /></div>
         <div style={{ display: vistaActual === 'empleados' ? 'block' : 'none' }}><Empleados /></div>
+        <div style={{ display: vistaActual === 'carnets' ? 'block' : 'none' }}><Carnets /></div>
         <div style={{ display: vistaActual === 'justificaciones' ? 'block' : 'none' }}><Justificaciones /></div>
         <div style={{ display: vistaActual === 'memos' ? 'block' : 'none' }}><Memos /></div>
         <div style={{ display: vistaActual === 'reportes' ? 'block' : 'none' }}><Reportes /></div>
