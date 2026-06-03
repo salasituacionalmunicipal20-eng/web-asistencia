@@ -545,19 +545,19 @@ NOTIFY pgrst, 'reload schema';
 --   5. Correr este SQL completo y dejar el UPDATE de abajo con la nueva version
 -- ============================================================================
 UPDATE app_versiones SET
-    version_codigo    = 12,
-    version_nombre    = '1.0.11',
+    version_codigo    = 13,
+    version_nombre    = '1.0.12',
     apk_url           = 'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-    notas             = 'Arreglo del cert SSL (ISRG Root X1 embebido) para que telefonos viejos como Alcatel 5059S con Android 8.1 puedan conectar a Supabase.',
+    notas             = 'Nueva seccion "Foto tipo carnet" en el perfil: el empleado toma o elige su foto desde la app (camara + galeria) con instrucciones detalladas para que salga bien. Esta foto sera la que se imprima en el carnet institucional.',
     obligatoria       = false,
     fecha_publicacion = NOW()
 WHERE id = 1;
 
 -- Si por alguna razon no existe la fila id=1, la creamos
 INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
-SELECT 1, 12, '1.0.11',
+SELECT 1, 13, '1.0.12',
        'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-       'Arreglo del cert SSL (ISRG Root X1 embebido) para que telefonos viejos como Alcatel 5059S con Android 8.1 puedan conectar a Supabase.',
+       'Nueva seccion "Foto tipo carnet" en el perfil: el empleado toma o elige su foto desde la app (camara + galeria) con instrucciones detalladas para que salga bien. Esta foto sera la que se imprima en el carnet institucional.',
        false
 WHERE NOT EXISTS (SELECT 1 FROM app_versiones WHERE id = 1);
 

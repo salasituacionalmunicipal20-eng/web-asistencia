@@ -288,7 +288,7 @@ export default function Carnets() {
           </div>
 
           <div style={{ background: '#fef3c7', borderLeft: `3px solid ${GOLD}`, color: '#78350f', padding: '10px 12px', borderRadius: 6, marginTop: 12, fontSize: 11.5, fontWeight: 600, lineHeight: 1.4 }}>
-            <strong>📐 Formato:</strong> CR80 (85.6 × 54 mm) + 3 mm de bleed.
+            <strong>FORMATO:</strong> CR80 (85.6 × 54 mm) + 3 mm de bleed.
             Cada empleado seleccionado ocupa 2 páginas del PDF (frente + reverso).
             La imprenta corta los 3 mm sobrantes despues de imprimir.
           </div>
@@ -329,6 +329,52 @@ function fmtHora(h) {
   return String(h).substring(0, 5)
 }
 
+// Formatea cedula a estilo oficial venezolano: V-12.345.678
+// Acepta inputs como "V12345678", "v-12345678", "12345678", "E12.345.678".
+function fmtCedula(ced) {
+  if (!ced) return '—'
+  const raw = String(ced).trim().toUpperCase()
+  const prefijo = raw.match(/^[VEJPG]/)?.[0] || 'V'
+  const digits = raw.replace(/[^0-9]/g, '')
+  if (!digits) return raw
+  // Inserta puntos cada 3 digitos desde la derecha
+  const conPuntos = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${prefijo}-${conPuntos}`
+}
+
+// Fecha de emision = hoy. Fecha de vencimiento = hoy + 2 anios.
+// Formato ISO YYYY-MM-DD para impresion estable (no depende del locale del PC).
+function hoyIso() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function vencimientoIso(anios = 2) {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() + anios)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Convierte fecha ISO a formato legible DD/MM/YYYY para mostrar en el carnet.
+function fmtFechaCarnet(iso) {
+  if (!iso || iso.length < 10) return '—'
+  const [y, m, d] = iso.substring(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
+// Carga el logo institucional (cristobal-rojas.png) como dataURL para embeber
+// en el PDF. Se cachea modulo-level para no re-fetchear en cada generacion.
+let _logoInstitucionalCache = null
+async function loadLogoInstitucional() {
+  if (_logoInstitucionalCache) return _logoInstitucionalCache
+  try {
+    const dataUrl = await fetchImageAsDataURL(new URL('logos/cristobal-rojas.png', window.location.href).toString())
+    _logoInstitucionalCache = dataUrl
+    return dataUrl
+  } catch {
+    return null
+  }
+}
+
 function MiniFoto({ emp }) {
   const [error, setError] = useState(false)
   if (emp.foto_url && !error) {
@@ -349,31 +395,112 @@ function MiniFoto({ emp }) {
 }
 
 // ─── PREVIEW HTML del carnet (lo que se ve en pantalla) ──────────────────
-// Replica visualmente lo que se imprime en el PDF, pero en HTML/CSS para
-// previsualizar facil. NO es lo que se imprime — el PDF se dibuja aparte
-// con jsPDF para que la imprenta tenga el archivo vectorial.
+// Disenado para REPLICAR exactamente lo que renderiza jsPDF en el PDF, asi
+// el cliente aprueba lo que va a recibir impreso. Reglas profesionales
+// aplicadas (basadas en investigacion de FIPS 201 / cedula colombiana /
+// PIV / corporate badges):
+//   - Sin gradientes (los carnets oficiales usan colores planos)
+//   - Sin box-shadow (es elemento decorativo de UI web, no de credencial)
+//   - Foto sin esquinas redondeadas, ratio 3:4 (estandar pasaporte)
+//   - Apellidos en linea superior UPPERCASE (estilo cedula venezolana)
+//   - Cedula formato V-XX.XXX.XXX en peso bold
+//   - Logo institucional real (cristobal-rojas.png) en el header
+//   - Reverso: terminos de uso + contacto + fechas + firma
+function CarnetFrenteHeader() {
+  return (
+    <div style={{
+      background: NAVY, color: 'white', padding: '5px 8px',
+      display: 'flex', alignItems: 'center', gap: 8,
+      borderBottom: `1.5px solid ${GOLD}`,
+      height: '21%',  // ~11mm de los 54mm del CR80
+      boxSizing: 'border-box',
+    }}>
+      <img
+        src="logos/cristobal-rojas.png"
+        alt=""
+        style={{ height: '100%', width: 'auto', objectFit: 'contain' }}
+      />
+      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.05 }}>
+        <div style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          Alcaldía del Municipio
+        </div>
+        <div style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          Cristóbal Rojas
+        </div>
+        <div style={{ fontSize: 5.5, fontWeight: 700, color: GOLD, letterSpacing: 0.5, marginTop: 1, textTransform: 'uppercase' }}>
+          Charallave — Estado Miranda
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CarnetReversoHeader() {
+  return (
+    <div style={{
+      background: NAVY, color: 'white', padding: '4px 8px',
+      borderBottom: `1.5px solid ${GOLD}`,
+      textAlign: 'center',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{ fontSize: 7.5, fontWeight: 900, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+        Carnet de Identificación Institucional
+      </div>
+    </div>
+  )
+}
+
 function CarnetFrente({ emp }) {
+  const apellidos = (emp.apellidos || '—').toUpperCase()
+  const nombres = (emp.nombres || '—').toUpperCase()
   return (
     <div style={cardShell}>
-      <CardHeader />
-      <div style={{ flex: 1, display: 'flex', padding: '8px 10px', gap: 10, alignItems: 'center' }}>
-        <Foto emp={emp} grande />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 9, color: TEXT_MUTED, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>Empleado</div>
-          <div style={{ fontSize: 13, fontWeight: 900, color: NAVY_DARK, lineHeight: 1.1, marginTop: 1, overflowWrap: 'break-word' }}>
-            {emp.nombres}<br/>{emp.apellidos}
+      <CarnetFrenteHeader />
+      <div style={{ flex: 1, display: 'flex', padding: '7px 8px', gap: 8, minHeight: 0 }}>
+        {/* Columna foto */}
+        <FotoPreview emp={emp} />
+        {/* Columna datos */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 5.5, color: TEXT_MUTED, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 0 }}>
+              Apellidos
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 900, color: TEXT_DARK, lineHeight: 1.05, letterSpacing: 0.2, marginBottom: 3 }}>
+              {apellidos}
+            </div>
+            <div style={{ fontSize: 5.5, color: TEXT_MUTED, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+              Nombres
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 800, color: TEXT_DARK, lineHeight: 1.1, letterSpacing: 0.15 }}>
+              {nombres}
+            </div>
           </div>
-          <div style={{ fontSize: 9.5, color: TEXT_DARK, marginTop: 4, fontWeight: 700 }}>
-            {emp.cargo || '—'}
-          </div>
-          <div style={{ fontSize: 8.5, color: TEXT_MUTED, fontWeight: 600 }}>
-            {emp.departamento || '—'}
+          <div>
+            <div style={{ fontSize: 5.5, color: TEXT_MUTED, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+              Cargo
+            </div>
+            <div style={{ fontSize: 8, fontWeight: 700, color: TEXT_DARK, lineHeight: 1.1, marginBottom: 2 }}>
+              {emp.cargo || '—'}
+            </div>
+            <div style={{ fontSize: 5.5, color: TEXT_MUTED, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+              Departamento
+            </div>
+            <div style={{ fontSize: 7, fontWeight: 600, color: TEXT_DARK, lineHeight: 1.1 }}>
+              {emp.departamento || '—'}
+            </div>
           </div>
         </div>
       </div>
+      {/* Barra cedula inferior — color solido, sin gradient */}
       <div style={cedulaBar}>
-        <span style={{ fontSize: 8.5, opacity: 0.85, marginRight: 6, fontWeight: 700 }}>C.I.</span>
-        <span style={{ fontSize: 13, fontWeight: 900, letterSpacing: 1 }}>{emp.cedula}</span>
+        <div>
+          <div style={{ fontSize: 5.5, color: GOLD, fontWeight: 800, letterSpacing: 0.6, lineHeight: 1 }}>
+            CÉDULA DE IDENTIDAD
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 900, color: 'white', letterSpacing: 1.2, fontFamily: 'Consolas, "Roboto Mono", monospace', marginTop: 1 }}>
+            {fmtCedula(emp.cedula)}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -382,90 +509,105 @@ function CarnetFrente({ emp }) {
 function CarnetReverso({ emp, oficina }) {
   const [qrUrl, setQrUrl] = useState('')
   useEffect(() => {
-    QRCode.toDataURL(emp.cedula || '', { width: 200, margin: 1, errorCorrectionLevel: 'M' })
+    // Error correction H (30%) — sobrevive abrasion y arrugas en plastico
+    QRCode.toDataURL(emp.cedula || '', { width: 200, margin: 1, errorCorrectionLevel: 'H' })
       .then(setQrUrl)
       .catch(() => setQrUrl(''))
   }, [emp.cedula])
 
   return (
     <div style={cardShell}>
-      <CardHeader />
-      <div style={{ flex: 1, display: 'flex', padding: '8px 10px', gap: 10, alignItems: 'center' }}>
-        {qrUrl ? (
-          <img src={qrUrl} alt="" style={{ width: 70, height: 70, borderRadius: 4, background: 'white' }} />
-        ) : (
-          <div style={{ width: 70, height: 70, background: '#f1f5f9', borderRadius: 4 }} />
-        )}
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.35, color: TEXT_DARK }}>
-          <div style={{ marginBottom: 4 }}>
-            <strong style={{ color: NAVY_DARK, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Horario</strong><br/>
-            {fmtHora(emp.hora_entrada)} — {fmtHora(emp.hora_salida)}
+      <CarnetReversoHeader />
+      <div style={{ flex: 1, padding: '6px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 0 }}>
+        {/* Terminos de uso */}
+        <div style={{ fontSize: 6, color: TEXT_DARK, lineHeight: 1.35 }}>
+          <div style={{ fontWeight: 800, color: NAVY, letterSpacing: 0.5, marginBottom: 2 }}>CONDICIONES DE USO</div>
+          <div>1. Este carnet es propiedad de la Alcaldía de Cristóbal Rojas.</div>
+          <div>2. Su uso es personal e intransferible. El uso indebido será sancionado.</div>
+          <div>3. En caso de extravío, notifique de inmediato a Recursos Humanos.</div>
+          <div>4. Debe ser portado visible durante la jornada laboral.</div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          {/* Bloque info */}
+          <div style={{ flex: 1, fontSize: 6, color: TEXT_DARK, lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 800, color: NAVY, letterSpacing: 0.5 }}>EN CASO DE EXTRAVÍO DEVOLVER A:</div>
+            <div>Alcaldía de Cristóbal Rojas — Recursos Humanos</div>
+            <div>{oficina?.direccion || 'Charallave, Estado Miranda'}</div>
+            <div style={{ marginTop: 4, display: 'flex', gap: 10 }}>
+              <div>
+                <div style={{ fontWeight: 800, color: NAVY }}>EMISIÓN</div>
+                <div style={{ fontFamily: 'Consolas, monospace' }}>{fmtFechaCarnet(hoyIso())}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, color: NAVY }}>VENCE</div>
+                <div style={{ fontFamily: 'Consolas, monospace' }}>{fmtFechaCarnet(vencimientoIso())}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontWeight: 800, color: NAVY }}>HORARIO</div>
+              <div style={{ fontFamily: 'Consolas, monospace' }}>{fmtHora(emp.hora_entrada)} — {fmtHora(emp.hora_salida)}</div>
+            </div>
           </div>
-          <div style={{ marginBottom: 4 }}>
-            <strong style={{ color: NAVY_DARK, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sede</strong><br/>
-            {oficina?.nombre || '—'}
-            {oficina?.direccion && <><br/><span style={{ color: TEXT_MUTED, fontSize: 8 }}>{oficina.direccion}</span></>}
-          </div>
+          {/* QR */}
+          {qrUrl ? (
+            <img src={qrUrl} alt="" style={{ width: 50, height: 50, background: 'white', flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 50, height: 50, background: '#f1f5f9', flexShrink: 0 }} />
+          )}
         </div>
       </div>
-      <div style={{ ...cedulaBar, justifyContent: 'center', fontSize: 7, fontWeight: 600, padding: '4px 8px', lineHeight: 1.3 }}>
-        Si encuentra este carnet, devuélvalo a la Alcaldía de Cristóbal Rojas.
+      {/* Cedula repetida abajo */}
+      <div style={cedulaBarReverso}>
+        <span style={{ fontSize: 5.5, color: GOLD, fontWeight: 800, marginRight: 5 }}>C.I.</span>
+        <span style={{ fontSize: 8.5, fontWeight: 900, color: 'white', letterSpacing: 0.8, fontFamily: 'Consolas, monospace' }}>
+          {fmtCedula(emp.cedula)}
+        </span>
       </div>
     </div>
   )
 }
 
-function Foto({ emp, grande = false }) {
+// Foto preview — proporcion 3:4 (estandar pasaporte/cedula), sin border-radius,
+// borde fino navy. Si no hay foto_url se muestra silueta gris neutra (NO el
+// placeholder con iniciales coloridas que es patron amateur).
+function FotoPreview({ emp }) {
   const [error, setError] = useState(false)
-  const tam = grande ? 60 : 30
-  const iniciales = getIniciales(emp)
-  if (emp.foto_url && !error) {
-    return (
-      <img
-        src={emp.foto_url}
-        alt=""
-        onError={() => setError(true)}
-        style={{ width: tam, height: tam * 1.25, objectFit: 'cover', borderRadius: 4, border: `1px solid ${NAVY}` }}
-      />
-    )
-  }
+  const tieneFoto = emp.foto_url && !error
+  // Proporcion 3:4 — ancho ~60px, alto 80px (24mm x 32mm en el PDF)
   return (
     <div style={{
-      width: tam, height: tam * 1.25, borderRadius: 4,
-      background: `linear-gradient(135deg, ${NAVY} 0%, ${NAVY_DARK} 100%)`,
-      color: GOLD, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontWeight: 900, fontSize: grande ? 22 : 11, letterSpacing: 1, border: `1px solid ${NAVY_DARK}`
+      width: 60, height: 80, flexShrink: 0,
+      background: '#e2e8f0',
+      border: `1px solid ${NAVY}`,
+      overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      {iniciales}
+      {tieneFoto ? (
+        <img
+          src={emp.foto_url}
+          alt=""
+          onError={() => setError(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="#94a3b8">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+      )}
     </div>
   )
 }
 
-function CardHeader() {
-  return (
-    <div style={{
-      background: `linear-gradient(135deg, ${NAVY_DARK} 0%, ${NAVY} 100%)`,
-      color: 'white', padding: '6px 10px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-      borderBottom: `2px solid ${GOLD}`,
-    }}>
-      <div style={{ fontSize: 8.5, fontWeight: 900, lineHeight: 1, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-        Alcaldía de<br/>Cristóbal Rojas
-      </div>
-      <div style={{ fontSize: 7, fontWeight: 700, color: GOLD, textAlign: 'right', lineHeight: 1.1, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-        Sala<br/>Situacional
-      </div>
-    </div>
-  )
-}
-
+// Shell del carnet — proporcion CR80, sin border-radius extremo, sin shadow
+// llamativo (sutil para indicar que es una tarjeta fisica, no decorativo).
 const cardShell = {
-  width: 280,
+  width: 290,
   aspectRatio: '85.6 / 54',
   background: 'white',
-  borderRadius: 8,
+  borderRadius: 3,
   border: `1px solid #cbd5e1`,
-  boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
@@ -474,12 +616,19 @@ const cardShell = {
 }
 
 const cedulaBar = {
-  background: `linear-gradient(90deg, ${NAVY_DARK}, ${NAVY})`,
+  background: NAVY,
   color: 'white',
-  padding: '5px 10px',
+  padding: '4px 8px',
+  borderTop: `1.5px solid ${GOLD}`,
+}
+
+const cedulaBarReverso = {
+  background: NAVY,
+  color: 'white',
+  padding: '3px 8px',
   display: 'flex',
-  alignItems: 'center',
-  borderTop: `2px solid ${GOLD}`,
+  alignItems: 'baseline',
+  borderTop: `1.5px solid ${GOLD}`,
 }
 
 // ============================================================================
@@ -499,7 +648,10 @@ async function generarPDFCarnets(empleados, oficinaPorId) {
     compress: true,
   })
 
-  // Pre-carga fotos para evitar await dentro del loop con jsPDF (que es sync).
+  // Pre-carga logo institucional (una vez para todo el PDF)
+  const logoInstitucional = await loadLogoInstitucional()
+
+  // Pre-carga fotos de empleados
   const fotosPorId = new Map()
   await Promise.all(empleados.map(async (emp) => {
     if (!emp.foto_url) return
@@ -516,10 +668,10 @@ async function generarPDFCarnets(empleados, oficinaPorId) {
     const foto = fotosPorId.get(emp.id) || null
 
     if (i > 0) doc.addPage([PAGE_W, PAGE_H], 'landscape')
-    dibujarFrente(doc, emp, foto)
+    dibujarFrente(doc, emp, foto, logoInstitucional)
 
     doc.addPage([PAGE_W, PAGE_H], 'landscape')
-    await dibujarReverso(doc, emp, oficinaPorId.get(emp.oficina_id))
+    await dibujarReverso(doc, emp, oficinaPorId.get(emp.oficina_id), logoInstitucional)
   }
 
   const filename = empleados.length === 1
@@ -552,34 +704,45 @@ function fetchImageAsDataURL(url) {
   })
 }
 
-function dibujarFrente(doc, emp, fotoDataUrl) {
-  // ─── Fondo blanco (toda la pagina incluyendo bleed) ──────────────────
+function dibujarFrente(doc, emp, fotoDataUrl, logoInstitucional) {
+  // ─── Fondo blanco (incluyendo bleed) ─────────────────────────────────
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, PAGE_W, PAGE_H, 'F')
 
-  // ─── Encabezado institucional (banda azul con linea dorada) ──────────
-  doc.setFillColor(0, 26, 92) // navy oscuro
-  doc.rect(BLEED, BLEED, CARD_W, 11, 'F')
-  doc.setFillColor(255, 204, 0) // dorado
-  doc.rect(BLEED, BLEED + 11, CARD_W, 0.8, 'F')
+  // ─── Encabezado institucional ───────────────────────────────────────
+  // Color SOLIDO navy (no gradient — los carnets oficiales usan colores
+  // planos; los gradientes son patron amateur).
+  // Banda 11mm alto (~20% del CR80) + linea dorada delgada de acento.
+  const HEADER_H = 11
+  doc.setFillColor(0, 51, 161) // NAVY #0033a1
+  doc.rect(BLEED, BLEED, CARD_W, HEADER_H, 'F')
+  doc.setFillColor(255, 204, 0) // GOLD
+  doc.rect(BLEED, BLEED + HEADER_H, CARD_W, 0.6, 'F')
 
+  // Logo institucional a la izquierda del header
+  if (logoInstitucional) {
+    try {
+      doc.addImage(logoInstitucional, 'PNG', BLEED + 1.5, BLEED + 1, 9, 9)
+    } catch {}
+  }
+
+  // Texto institucional
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
-  doc.text('ALCALDÍA DE CRISTÓBAL ROJAS', BLEED + 3, BLEED + 4.5)
-  doc.setFontSize(5.5)
+  doc.text('ALCALDÍA DEL MUNICIPIO', BLEED + 12, BLEED + 4)
+  doc.setFontSize(8)
+  doc.text('CRISTÓBAL ROJAS', BLEED + 12, BLEED + 7.3)
+  doc.setFontSize(5)
   doc.setTextColor(255, 204, 0)
-  doc.text('Sala Situacional · Control de Acceso', BLEED + 3, BLEED + 8.5)
+  doc.text('CHARALLAVE — ESTADO MIRANDA', BLEED + 12, BLEED + 10)
 
-  doc.setTextColor(255, 204, 0)
-  doc.setFontSize(6)
-  doc.text('EMPLEADO', BLEED + CARD_W - 3, BLEED + 7, { align: 'right' })
-
-  // ─── Foto (a la izquierda, 22x28mm) ──────────────────────────────────
+  // ─── Foto 3:4 (24x32mm = ratio 0.75, estandar pasaporte/cedula) ─────
+  // Posicion: tercio izquierdo del cuerpo, sin esquinas redondeadas.
   const fotoX = BLEED + 3
-  const fotoY = BLEED + 15
-  const fotoW = 22
-  const fotoH = 28
+  const fotoY = BLEED + HEADER_H + 2.5
+  const fotoW = 24
+  const fotoH = 32
   if (fotoDataUrl) {
     try {
       doc.addImage(fotoDataUrl, 'JPEG', fotoX, fotoY, fotoW, fotoH)
@@ -589,169 +752,227 @@ function dibujarFrente(doc, emp, fotoDataUrl) {
   } else {
     dibujarFotoPlaceholder(doc, emp, fotoX, fotoY, fotoW, fotoH)
   }
-  // borde alrededor de la foto
-  doc.setDrawColor(0, 26, 92)
-  doc.setLineWidth(0.3)
+  // Borde fino navy alrededor de la foto (sin redondeo)
+  doc.setDrawColor(0, 51, 161)
+  doc.setLineWidth(0.25)
   doc.rect(fotoX, fotoY, fotoW, fotoH)
 
-  // ─── Datos del empleado (a la derecha de la foto) ────────────────────
+  // ─── Datos del empleado (columna derecha) ────────────────────────────
+  // Patron oficial: apellidos primero (cedula colombiana / venezolana / DNI).
+  // Apellidos UPPERCASE en mayor jerarquia, nombres debajo.
   const datosX = fotoX + fotoW + 4
-  let cursorY = fotoY + 3
+  const colW = BLEED + CARD_W - datosX - 2
+  let cursorY = fotoY + 2
 
+  // APELLIDOS (linea superior, mayor peso)
   doc.setTextColor(100, 116, 139)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(5.5)
-  doc.text('NOMBRES', datosX, cursorY)
-  cursorY += 3
-  doc.setTextColor(15, 23, 42)
-  doc.setFontSize(10)
-  const nombresLineas = doc.splitTextToSize(emp.nombres || '—', CARD_W - (datosX - BLEED) - 3)
-  doc.text(nombresLineas, datosX, cursorY)
-  cursorY += nombresLineas.length * 3.8 + 1
-
-  doc.setTextColor(100, 116, 139)
-  doc.setFontSize(5.5)
+  doc.setFontSize(4.8)
   doc.text('APELLIDOS', datosX, cursorY)
-  cursorY += 3
+  cursorY += 2.5
   doc.setTextColor(15, 23, 42)
   doc.setFontSize(10)
-  const apellidosLineas = doc.splitTextToSize(emp.apellidos || '—', CARD_W - (datosX - BLEED) - 3)
+  const apellidos = (emp.apellidos || '—').toUpperCase()
+  const apellidosLineas = doc.splitTextToSize(apellidos, colW)
   doc.text(apellidosLineas, datosX, cursorY)
-  cursorY += apellidosLineas.length * 3.8 + 1.5
+  cursorY += apellidosLineas.length * 3.8 + 1
 
+  // NOMBRES (linea inferior, peso un poco menor)
   doc.setTextColor(100, 116, 139)
-  doc.setFontSize(5.5)
+  doc.setFontSize(4.8)
+  doc.text('NOMBRES', datosX, cursorY)
+  cursorY += 2.5
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(8.5)
+  const nombres = (emp.nombres || '—').toUpperCase()
+  const nombresLineas = doc.splitTextToSize(nombres, colW)
+  doc.text(nombresLineas, datosX, cursorY)
+  cursorY += nombresLineas.length * 3.2 + 2
+
+  // CARGO
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(4.8)
   doc.text('CARGO', datosX, cursorY)
-  cursorY += 3
-  doc.setTextColor(0, 51, 161)
+  cursorY += 2.5
+  doc.setTextColor(15, 23, 42)
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  const cargoLineas = doc.splitTextToSize(emp.cargo || '—', CARD_W - (datosX - BLEED) - 3)
+  const cargoLineas = doc.splitTextToSize(emp.cargo || '—', colW)
   doc.text(cargoLineas, datosX, cursorY)
-  cursorY += cargoLineas.length * 3.2 + 1
+  cursorY += cargoLineas.length * 2.9 + 1.5
 
+  // DEPARTAMENTO
   doc.setTextColor(100, 116, 139)
-  doc.setFontSize(5)
+  doc.setFontSize(4.8)
+  doc.setFont('helvetica', 'bold')
+  doc.text('DEPARTAMENTO', datosX, cursorY)
+  cursorY += 2.5
+  doc.setTextColor(15, 23, 42)
   doc.setFont('helvetica', 'normal')
-  const depLineas = doc.splitTextToSize(emp.departamento || '—', CARD_W - (datosX - BLEED) - 3)
+  doc.setFontSize(6.5)
+  const depLineas = doc.splitTextToSize(emp.departamento || '—', colW)
   doc.text(depLineas, datosX, cursorY)
 
-  // ─── Cedula en barra inferior ────────────────────────────────────────
-  doc.setFillColor(0, 51, 161) // navy
-  doc.rect(BLEED, BLEED + CARD_H - 6.5, CARD_W, 6.5, 'F')
-  doc.setFillColor(255, 204, 0) // dorado top
-  doc.rect(BLEED, BLEED + CARD_H - 6.5, CARD_W, 0.5, 'F')
+  // ─── Cedula en barra inferior — formato V-XX.XXX.XXX ────────────────
+  const cedulaY = BLEED + CARD_H - 7
+  doc.setFillColor(0, 51, 161)
+  doc.rect(BLEED, cedulaY, CARD_W, 7, 'F')
+  doc.setFillColor(255, 204, 0)
+  doc.rect(BLEED, cedulaY, CARD_W, 0.4, 'F')
 
   doc.setTextColor(255, 204, 0)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(5.5)
-  doc.text('CÉDULA DE IDENTIDAD', BLEED + 3, BLEED + CARD_H - 3.8)
+  doc.setFontSize(5)
+  doc.text('CÉDULA DE IDENTIDAD', BLEED + 3, cedulaY + 3)
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(11)
-  doc.text(emp.cedula || '—', BLEED + 3, BLEED + CARD_H - 1)
+  // courier es monospaced — los digitos quedan alineados, sin confusion 1/I/l
+  doc.setFont('courier', 'bold')
+  doc.text(fmtCedula(emp.cedula), BLEED + 3, cedulaY + 6)
+  doc.setFont('helvetica', 'normal')
 }
 
-async function dibujarReverso(doc, emp, oficina) {
+async function dibujarReverso(doc, emp, oficina, logoInstitucional) {
   // ─── Fondo blanco ────────────────────────────────────────────────────
   doc.setFillColor(255, 255, 255)
   doc.rect(0, 0, PAGE_W, PAGE_H, 'F')
 
-  // ─── Encabezado (igual al frente para consistencia) ──────────────────
-  doc.setFillColor(0, 26, 92)
-  doc.rect(BLEED, BLEED, CARD_W, 11, 'F')
+  // ─── Encabezado slim del reverso ────────────────────────────────────
+  // El reverso NO repite el header completo del frente (eso desperdicia
+  // espacio util). Solo una banda navy delgada con el titulo del documento.
+  const HEADER_H = 6
+  doc.setFillColor(0, 51, 161)
+  doc.rect(BLEED, BLEED, CARD_W, HEADER_H, 'F')
   doc.setFillColor(255, 204, 0)
-  doc.rect(BLEED, BLEED + 11, CARD_W, 0.8, 'F')
+  doc.rect(BLEED, BLEED + HEADER_H, CARD_W, 0.4, 'F')
 
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.text('ALCALDÍA DE CRISTÓBAL ROJAS', BLEED + 3, BLEED + 4.5)
-  doc.setFontSize(5.5)
-  doc.setTextColor(255, 204, 0)
-  doc.text('Sala Situacional · Control de Acceso', BLEED + 3, BLEED + 8.5)
-
-  doc.setTextColor(255, 204, 0)
   doc.setFontSize(6)
-  doc.text('REVERSO', BLEED + CARD_W - 3, BLEED + 7, { align: 'right' })
+  doc.text('CARNET DE IDENTIFICACIÓN INSTITUCIONAL', BLEED + CARD_W / 2, BLEED + 4, { align: 'center' })
 
-  // ─── QR (centrado vertical, lado izquierdo) ──────────────────────────
-  const qrSize = 25
-  const qrX = BLEED + 4
-  const qrY = BLEED + 16
+  // ─── CONDICIONES DE USO (terminos numerados) ─────────────────────────
+  let cursorY = BLEED + HEADER_H + 4
+  doc.setTextColor(0, 51, 161)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.5)
+  doc.text('CONDICIONES DE USO', BLEED + 3, cursorY)
+  cursorY += 3
+
+  doc.setTextColor(30, 41, 59)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5.2)
+  const terminos = [
+    '1. Este carnet es propiedad de la Alcaldía de Cristóbal Rojas.',
+    '2. Su uso es personal e intransferible. El uso indebido será sancionado.',
+    '3. En caso de extravío, notifique a Recursos Humanos de inmediato.',
+    '4. Debe ser portado visible durante toda la jornada laboral.',
+  ]
+  terminos.forEach(t => {
+    const lineas = doc.splitTextToSize(t, CARD_W - 6)
+    doc.text(lineas, BLEED + 3, cursorY)
+    cursorY += lineas.length * 2.3
+  })
+
+  cursorY += 1.5
+
+  // ─── EN CASO DE EXTRAVIO + datos ─────────────────────────────────────
+  doc.setTextColor(0, 51, 161)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.5)
+  doc.text('EN CASO DE EXTRAVÍO, DEVOLVER A:', BLEED + 3, cursorY)
+  cursorY += 2.8
+
+  doc.setTextColor(30, 41, 59)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5.2)
+  doc.text('Alcaldía de Cristóbal Rojas — Recursos Humanos', BLEED + 3, cursorY)
+  cursorY += 2.5
+  const direccion = oficina?.direccion || 'Charallave, Estado Miranda'
+  const dirLineas = doc.splitTextToSize(direccion, CARD_W - 38)
+  doc.text(dirLineas, BLEED + 3, cursorY)
+  cursorY += dirLineas.length * 2.3 + 1.5
+
+  // ─── Bloque fechas + horario (compacto, izquierda) ──────────────────
+  const fechaX = BLEED + 3
+  let fechaY = cursorY
+  // Fila: EMISION | VENCE | HORARIO
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(4.8)
+  doc.setTextColor(0, 51, 161)
+  doc.text('EMISIÓN', fechaX, fechaY)
+  doc.text('VENCE', fechaX + 16, fechaY)
+  doc.text('HORARIO', fechaX + 32, fechaY)
+
+  fechaY += 2.5
+  doc.setFont('courier', 'bold')
+  doc.setFontSize(6)
+  doc.setTextColor(30, 41, 59)
+  doc.text(fmtFechaCarnet(hoyIso()), fechaX, fechaY)
+  doc.text(fmtFechaCarnet(vencimientoIso()), fechaX + 16, fechaY)
+  doc.text(`${fmtHora(emp.hora_entrada)}-${fmtHora(emp.hora_salida)}`, fechaX + 32, fechaY)
+  doc.setFont('helvetica', 'normal')
+
+  // ─── QR esquina inferior derecha (error correction H = 30%) ─────────
+  // En el reverso del carnet, no compitiendo con la foto del frente.
+  // Error correction H permite que sobreviva abrasion y arrugas en plastico.
+  const qrSize = 18
+  const qrX = BLEED + CARD_W - qrSize - 3
+  const qrY = BLEED + CARD_H - qrSize - 9
   try {
     const qrDataUrl = await QRCode.toDataURL(emp.cedula || '', {
       width: 300,
       margin: 1,
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'H',
       color: { dark: '#000000', light: '#FFFFFF' },
     })
     doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
   } catch (e) {
-    // Si QRCode falla por lo que sea, dejamos un placeholder
     doc.setFillColor(241, 245, 249)
     doc.rect(qrX, qrY, qrSize, qrSize, 'F')
   }
-
-  // ─── Datos a la derecha del QR ───────────────────────────────────────
-  const datosX = qrX + qrSize + 4
-  const colW = CARD_W - (datosX - BLEED) - 3
-  let cursorY = qrY + 2
-
-  doc.setTextColor(0, 26, 92)
+  // Etiqueta debajo del QR
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(4)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(5.5)
-  doc.text('HORARIO', datosX, cursorY)
-  cursorY += 3
-  doc.setTextColor(15, 23, 42)
-  doc.setFontSize(8)
-  doc.text(`${fmtHora(emp.hora_entrada)} — ${fmtHora(emp.hora_salida)}`, datosX, cursorY)
-  cursorY += 4
+  doc.text('VERIFICACIÓN', qrX + qrSize / 2, qrY + qrSize + 1.5, { align: 'center' })
 
-  doc.setTextColor(0, 26, 92)
-  doc.setFontSize(5.5)
-  doc.setFont('helvetica', 'bold')
-  doc.text('SEDE ASIGNADA', datosX, cursorY)
-  cursorY += 3
-  doc.setTextColor(15, 23, 42)
-  doc.setFontSize(7)
-  const sedeNombre = oficina?.nombre || '—'
-  const sedeLineas = doc.splitTextToSize(sedeNombre, colW)
-  doc.text(sedeLineas, datosX, cursorY)
-  cursorY += sedeLineas.length * 2.8 + 0.5
-  if (oficina?.direccion) {
-    doc.setTextColor(100, 116, 139)
-    doc.setFontSize(5.5)
-    doc.setFont('helvetica', 'normal')
-    const dirLineas = doc.splitTextToSize(oficina.direccion, colW)
-    doc.text(dirLineas, datosX, cursorY)
-  }
-
-  // ─── Mensaje legal en la parte inferior ──────────────────────────────
+  // ─── Cedula repetida en barra inferior (correlacion con frente) ─────
   doc.setFillColor(0, 51, 161)
-  doc.rect(BLEED, BLEED + CARD_H - 8, CARD_W, 8, 'F')
+  doc.rect(BLEED, BLEED + CARD_H - 5, CARD_W, 5, 'F')
   doc.setFillColor(255, 204, 0)
-  doc.rect(BLEED, BLEED + CARD_H - 8, CARD_W, 0.5, 'F')
+  doc.rect(BLEED, BLEED + CARD_H - 5, CARD_W, 0.4, 'F')
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(5.2)
-  const aviso = 'Si encuentra este carnet, devuélvalo a la Alcaldía de Cristóbal Rojas. Documento personal e intransferible.'
-  const avisoLineas = doc.splitTextToSize(aviso, CARD_W - 6)
-  doc.text(avisoLineas, BLEED + CARD_W / 2, BLEED + CARD_H - 4.5, { align: 'center' })
-
-  // Pequeña linea de cedula reverso (para correlación)
   doc.setTextColor(255, 204, 0)
-  doc.setFontSize(5.5)
   doc.setFont('helvetica', 'bold')
-  doc.text(`C.I. ${emp.cedula || '—'}`, BLEED + CARD_W - 3, BLEED + CARD_H - 1, { align: 'right' })
+  doc.setFontSize(4.5)
+  doc.text('C.I.', BLEED + 3, BLEED + CARD_H - 2)
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('courier', 'bold')
+  doc.setFontSize(8)
+  doc.text(fmtCedula(emp.cedula), BLEED + 6, BLEED + CARD_H - 1.5)
+  doc.setFont('helvetica', 'normal')
 }
 
 function dibujarFotoPlaceholder(doc, emp, x, y, w, h) {
-  // fondo navy
-  doc.setFillColor(0, 51, 161)
+  // Fondo gris claro neutro (estandar de carnets institucionales cuando
+  // falta la foto — NO el navy con iniciales coloridas que es patron
+  // amateur de "avatar de app web").
+  doc.setFillColor(226, 232, 240) // gris claro
   doc.rect(x, y, w, h, 'F')
-  // iniciales centradas en dorado
-  doc.setTextColor(255, 204, 0)
+  // Silueta gris media (cabeza + hombros)
+  doc.setFillColor(148, 163, 184)
+  // Cabeza (circulo aproximado con elipse)
+  const cx = x + w / 2
+  const cyHead = y + h * 0.32
+  const rHead = w * 0.22
+  doc.ellipse(cx, cyHead, rHead, rHead, 'F')
+  // Hombros (trapecio aproximado con elipse alargada en la parte baja)
+  const cyShoulders = y + h * 0.92
+  doc.ellipse(cx, cyShoulders, w * 0.45, h * 0.32, 'F')
+  // Texto pequeno "SIN FOTO" debajo del centro
+  doc.setTextColor(71, 85, 105)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(22)
-  doc.text(getIniciales(emp), x + w / 2, y + h / 2 + 4, { align: 'center' })
+  doc.setFontSize(4.5)
+  doc.text('SIN FOTO', x + w / 2, y + h - 1.5, { align: 'center' })
 }
