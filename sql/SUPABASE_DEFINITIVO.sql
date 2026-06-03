@@ -307,6 +307,38 @@ ON CONFLICT (id) DO UPDATE SET
 
 
 -- ============================================================================
+-- 8b. STORAGE BUCKET empleados-fotos — fotos tipo carnet
+-- ============================================================================
+-- La app movil sube aqui las fotos tipo carnet desde el perfil del empleado
+-- (1.0.12+). El panel admin tambien lo usa. Sin este bucket creado, la app
+-- da error "Bucket not found" al intentar subir.
+-- ============================================================================
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'empleados-fotos', 'empleados-fotos', true, 5242880,
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/jpg']::text[]
+)
+ON CONFLICT (id) DO UPDATE SET
+    public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "empleados_fotos_select" ON storage.objects;
+DROP POLICY IF EXISTS "empleados_fotos_insert" ON storage.objects;
+DROP POLICY IF EXISTS "empleados_fotos_update" ON storage.objects;
+DROP POLICY IF EXISTS "empleados_fotos_delete" ON storage.objects;
+
+CREATE POLICY "empleados_fotos_select" ON storage.objects FOR SELECT
+USING (bucket_id = 'empleados-fotos');
+CREATE POLICY "empleados_fotos_insert" ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'empleados-fotos');
+CREATE POLICY "empleados_fotos_update" ON storage.objects FOR UPDATE
+USING (bucket_id = 'empleados-fotos') WITH CHECK (bucket_id = 'empleados-fotos');
+CREATE POLICY "empleados_fotos_delete" ON storage.objects FOR DELETE
+USING (bucket_id = 'empleados-fotos');
+
+
+-- ============================================================================
 -- 9. UBICACIONES_EMPLEADOS (para el radar tiempo real)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS ubicaciones_empleados (
