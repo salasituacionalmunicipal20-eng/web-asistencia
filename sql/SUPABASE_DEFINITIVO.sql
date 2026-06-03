@@ -449,6 +449,7 @@ DROP FUNCTION IF EXISTS public.snapshot_ausencias_dia(date);
 DROP FUNCTION IF EXISTS public.reportar_version_app(text, text, int);
 DROP FUNCTION IF EXISTS public.actualizar_ubicacion(text, double precision, double precision, double precision, int, boolean);
 DROP FUNCTION IF EXISTS public.obtener_clave_empleado(text, text);
+DROP FUNCTION IF EXISTS public.generar_memos_sin_salida(date);
 
 
 -- verificar_clave: FIX del bug 'cedula is ambiguous' con #variable_conflict
@@ -693,6 +694,75 @@ GRANT EXECUTE ON FUNCTION public.obtener_clave_empleado(text, text) TO anon, aut
 
 
 -- ============================================================================
+-- generar_memos_sin_salida: genera memos automaticos a empleados que
+-- marcaron entrada pero NO marcaron salida en una fecha dada (por defecto
+-- el dia de AYER, para correr en la madrugada del dia siguiente).
+--
+-- Idempotente: si el memo de esa fecha ya existe para el empleado, NO lo
+-- duplica (lo detecta por titulo que arranca con 'FALTA: NO MARCO SU SALIDA').
+--
+-- Devuelve cantidad de memos generados. Se puede correr manualmente desde
+-- el SQL Editor o programar via pg_cron (ver bloque comentado al final del
+-- archivo).
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.generar_memos_sin_salida(
+    p_fecha date DEFAULT (CURRENT_DATE - INTERVAL '1 day')::date
+)
+RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_count int := 0; v_titulo text;
+BEGIN
+    IF p_fecha IS NULL THEN RAISE EXCEPTION 'La fecha es obligatoria'; END IF;
+    IF p_fecha > CURRENT_DATE THEN RAISE EXCEPTION 'No se puede generar memos de una fecha futura'; END IF;
+
+    v_titulo := 'FALTA: NO MARCO SU SALIDA EL ' || to_char(p_fecha, 'DD/MM/YYYY');
+
+    INSERT INTO memorandums (empleado_id, titulo, descripcion, fecha_emision, leido)
+    SELECT DISTINCT
+        ar.empleado_id,
+        v_titulo,
+        'Estimado empleado: se le notifica que el dia ' || to_char(p_fecha, 'DD/MM/YYYY') ||
+        ' marco su ENTRADA pero NO marco su SALIDA al final de la jornada laboral. ' ||
+        E'\n\nRecuerde que es OBLIGATORIO marcar tanto la entrada como la salida en cada jornada laboral. ' ||
+        'No marcar la salida cuenta como una FALTA administrativa que queda registrada en su expediente. ' ||
+        E'\n\nSi tuvo algun inconveniente tecnico que le impidio marcar la salida, debe acudir a Recursos Humanos ' ||
+        'para presentar la justificacion correspondiente. ' ||
+        E'\n\nPor favor, asegurese de marcar SIEMPRE su salida al finalizar su jornada de trabajo.',
+        p_fecha,
+        false
+    FROM asistencia_registros ar
+    INNER JOIN empleados e ON e.cedula = ar.empleado_id AND COALESCE(e.activo, true) = true
+    WHERE ar.fecha = p_fecha
+      AND ar.hora_entrada IS NOT NULL
+      AND ar.hora_salida IS NULL
+      -- Evita duplicar: si ya existe un memo "FALTA: NO MARCO SU SALIDA" de esa fecha
+      AND NOT EXISTS (
+          SELECT 1 FROM memorandums m
+          WHERE m.empleado_id = ar.empleado_id
+            AND m.fecha_emision = p_fecha
+            AND m.titulo LIKE 'FALTA: NO MARCO SU SALIDA%'
+      )
+      -- Excluye si el empleado tiene justificacion APROBADA para ese dia
+      AND NOT EXISTS (
+          SELECT 1 FROM justificaciones j
+          WHERE j.empleado_id = ar.empleado_id
+            AND j.fecha_falta = p_fecha
+            AND j.estado = 'Aprobado'
+      );
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+
+    INSERT INTO auditoria (tabla, accion, valor_nuevo, usuario_email)
+    VALUES ('memorandums', 'AUTO_GENERAR_SIN_SALIDA',
+            'fecha=' || p_fecha::text || ' generados=' || v_count::text,
+            'SISTEMA_AUTO');
+
+    RETURN v_count;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.generar_memos_sin_salida(date) TO anon, authenticated;
+
+
+-- ============================================================================
 -- 12. GRANTS finales + reload schema
 -- ============================================================================
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;
@@ -715,9 +785,36 @@ SELECT
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='actualizar_ubicacion') AS rpc_radar,
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='reportar_version_app') AS rpc_reportar_version,
     EXISTS(SELECT 1 FROM pg_proc WHERE proname='snapshot_ausencias_dia') AS rpc_snapshot_ausencias,
+    EXISTS(SELECT 1 FROM pg_proc WHERE proname='generar_memos_sin_salida') AS rpc_memos_sin_salida,
     EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_kpis_hoy') AS vw_kpis,
     EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_versiones_app') AS vw_versiones,
     EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_radar_empleados') AS vw_radar,
     EXISTS(SELECT 1 FROM pg_views WHERE viewname='vw_ausentes_hoy') AS vw_ausentes;
 
 SELECT id, nombre, latitud, longitud, radio_metros FROM oficinas ORDER BY nombre;
+
+
+-- ============================================================================
+-- 14. (OPCIONAL) Programacion diaria con pg_cron
+-- ============================================================================
+-- Para que generar_memos_sin_salida corra AUTOMATICAMENTE cada dia sin que
+-- nadie lo dispare a mano, descomenta el bloque de abajo. Requisitos:
+--   1. Habilitar la extension pg_cron desde Supabase Dashboard:
+--      Database -> Extensions -> buscar 'pg_cron' -> Enable
+--   2. Correr el bloque de abajo (CREATE EXTENSION + cron.schedule)
+--   3. Verificar con: SELECT * FROM cron.job;
+--
+-- El schedule '0 10 * * *' corre todos los dias a las 10:00 UTC,
+-- que es las 6:00 AM en Caracas (UTC-4). Asi el memo del dia anterior
+-- ya esta listo cuando RRHH llega a la oficina.
+--
+-- Para CANCELAR la programacion:
+--   SELECT cron.unschedule('generar_memos_sin_salida_diario');
+-- ============================================================================
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+--
+-- SELECT cron.schedule(
+--     'generar_memos_sin_salida_diario',
+--     '0 10 * * *',  -- todos los dias 10:00 UTC = 6:00 AM Caracas
+--     $$SELECT public.generar_memos_sin_salida((CURRENT_DATE - INTERVAL '1 day')::date);$$
+-- );
