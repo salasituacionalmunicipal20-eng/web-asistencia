@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff, Eye, AlertTriangle, Copy } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff, Eye, AlertTriangle, Copy, IdCard, RefreshCw } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
@@ -340,6 +340,99 @@ export default function Empleados() {
     }
   }
 
+  // ───────────────────────────────────────────────────────────────────
+  // Consulta CNE via Edge Function `consultar-cedula`. La function corre
+  // en Deno dentro del dominio Supabase del proyecto y proxiya
+  // api.cedula.com.ve (que no expone CORS). Las credenciales viven como
+  // secrets de Supabase, NO en el cliente.
+  //
+  // Flujo: click → modal con loading → muestra los datos del CNE al
+  // lado de los actuales del empleado → boton "Guardar cambios" hace
+  // UPDATE en la tabla empleados solo de los campos que cambien.
+  // ───────────────────────────────────────────────────────────────────
+  const [modalCNE, setModalCNE] = useState({
+    abierto: false,
+    empleado: null,
+    cargando: false,
+    error: '',
+    datos: null,        // payload.data de cedula.com.ve
+    propuesta: null,    // { nombres, apellidos, fecha_cumpleanos } sugeridos
+    guardando: false,
+  })
+  const cerrarModalCNE = () => setModalCNE({ abierto: false, empleado: null, cargando: false, error: '', datos: null, propuesta: null, guardando: false })
+
+  const consultarCNE = async (emp) => {
+    setModalCNE({ abierto: true, empleado: emp, cargando: true, error: '', datos: null, propuesta: null, guardando: false })
+    const cedulaSoloNumeros = String(emp.cedula || '').replace(/\D/g, '')
+    if (!cedulaSoloNumeros) {
+      setModalCNE(s => ({ ...s, cargando: false, error: 'El empleado no tiene una cédula numérica válida.' }))
+      return
+    }
+    try {
+      const { data: resp, error: errFn } = await supabase.functions.invoke('consultar-cedula', {
+        body: { cedula: cedulaSoloNumeros },
+      })
+      if (errFn) {
+        setModalCNE(s => ({ ...s, cargando: false, error: `No se pudo invocar la función: ${errFn.message}. ¿Ya la desplegaste en Supabase?` }))
+        return
+      }
+      if (resp?.error) {
+        const mapa = {
+          RECORD_NOT_FOUND: 'No se encontró esta cédula en el CNE.',
+          INVALID_TOKEN: 'Credenciales de cedula.com.ve inválidas o vencidas.',
+          MISSING_CREDENTIALS: 'Faltan los secrets CEDULA_APP_ID y CEDULA_TOKEN en Supabase.',
+          DB_ERROR: 'El servicio devolvió un error de base de datos. Revisa el formato.',
+          INVALID_CEDULA: 'Formato de cédula inválido (debe ser solo números, 5-9 dígitos).',
+          PROXY_ERROR: 'No se pudo contactar a cedula.com.ve (problema de red del proxy).',
+        }
+        setModalCNE(s => ({ ...s, cargando: false, error: mapa[resp.error_str] || `Error: ${resp.error_str || 'desconocido'}` }))
+        return
+      }
+      const d = resp?.data
+      if (!d) {
+        setModalCNE(s => ({ ...s, cargando: false, error: 'Respuesta vacía del servicio.' }))
+        return
+      }
+      // Construir propuesta: nombres = primer_nombre + segundo (si lo hubiera);
+      // apellidos = primer_apellido + segundo. El API a veces devuelve null en
+      // segundo_nombre/segundo_apellido, por eso filtramos.
+      const nombresProp = [d.primer_nombre, d.segundo_nombre].filter(Boolean).join(' ').trim()
+      const apellidosProp = [d.primer_apellido, d.segundo_apellido].filter(Boolean).join(' ').trim()
+      const fechaProp = d.fecha_nac || ''  // ya viene en formato YYYY-MM-DD
+      setModalCNE(s => ({
+        ...s,
+        cargando: false,
+        datos: d,
+        propuesta: { nombres: nombresProp, apellidos: apellidosProp, fecha_cumpleanos: fechaProp },
+      }))
+    } catch (e) {
+      setModalCNE(s => ({ ...s, cargando: false, error: `Error inesperado: ${e.message}` }))
+    }
+  }
+
+  const aplicarCNE = async () => {
+    if (!modalCNE.empleado || !modalCNE.propuesta) return
+    setModalCNE(s => ({ ...s, guardando: true, error: '' }))
+    // Solo actualizamos los campos que realmente cambian (asi el log de auditoria
+    // queda mas limpio). Cualquier campo vacio en la propuesta se omite tambien.
+    const patch = {}
+    const { propuesta, empleado } = modalCNE
+    if (propuesta.nombres && propuesta.nombres !== empleado.nombres) patch.nombres = propuesta.nombres
+    if (propuesta.apellidos && propuesta.apellidos !== empleado.apellidos) patch.apellidos = propuesta.apellidos
+    if (propuesta.fecha_cumpleanos && propuesta.fecha_cumpleanos !== empleado.fecha_cumpleanos) patch.fecha_cumpleanos = propuesta.fecha_cumpleanos
+    if (Object.keys(patch).length === 0) {
+      setModalCNE(s => ({ ...s, guardando: false, error: 'No hay cambios para guardar — los datos ya coinciden.' }))
+      return
+    }
+    const { error: errUp } = await supabase.from('empleados').update(patch).eq('cedula', empleado.cedula)
+    if (errUp) {
+      setModalCNE(s => ({ ...s, guardando: false, error: `Error al guardar: ${errUp.message}` }))
+      return
+    }
+    cerrarModalCNE()
+    await obtenerEmpleados()
+  }
+
   // Carga un empleado en el formulario para proceder con la edición
   const activarModoEdicion = (empleado) => {
     setEditandoId(empleado.id)
@@ -668,6 +761,7 @@ export default function Empleados() {
                   </td>
                   <td style={{ padding: '15px 20px', textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button onClick={() => consultarCNE(emp)}          title="Consultar datos en el CNE y previsualizar"   style={{ padding: '6px 10px', backgroundColor: '#ecfeff', color: '#0e7490', border: '1px solid #67e8f9', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><IdCard size={12} /> CNE</button>
                       <button onClick={() => activarModoEdicion(emp)}    title="Editar"    style={{ padding: '6px 10px', backgroundColor: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Pencil size={12} /> Editar</button>
                       <button onClick={() => abrirSelectorFoto(emp.cedula)} title="Subir foto" style={{ padding: '6px 10px', backgroundColor: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Camera size={12} /> Foto</button>
                       <button onClick={() => resetearClave(emp.cedula)}   title="Resetear clave" style={{ padding: '6px 10px', backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><KeyRound size={12} /> Clave</button>
@@ -758,6 +852,96 @@ export default function Empleados() {
               style={{ width: '100%', padding: 12, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
               Cerrar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONSULTA CNE — muestra datos del CNE vs actuales y permite aplicar */}
+      {modalCNE.abierto && (
+        <div onClick={(e) => { if (e.target === e.currentTarget && !modalCNE.guardando) cerrarModalCNE() }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'white', borderRadius: 14, padding: 24, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.4)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, display: 'inline-flex', alignItems: 'center', gap: 8, color: '#0e7490' }}>
+                <IdCard size={20} /> Consulta CNE — V-{modalCNE.empleado?.cedula}
+              </h3>
+              <button onClick={cerrarModalCNE} disabled={modalCNE.guardando}
+                style={{ background: 'transparent', border: 'none', cursor: modalCNE.guardando ? 'not-allowed' : 'pointer', color: '#64748b', padding: 4, opacity: modalCNE.guardando ? 0.4 : 1 }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {modalCNE.cargando && (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#0e7490', fontWeight: 700 }}>
+                <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                <div style={{ marginTop: 10 }}>Consultando registro electoral...</div>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+
+            {modalCNE.error && (
+              <div style={{ background: '#fef2f2', borderLeft: '4px solid #dc2626', padding: 12, borderRadius: 8, color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 14, display: 'flex', gap: 8 }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>{modalCNE.error}</div>
+              </div>
+            )}
+
+            {modalCNE.propuesta && !modalCNE.cargando && (
+              <>
+                <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, color: '#0c4a6e', fontWeight: 600 }}>
+                  Compara los datos actuales en el sistema vs lo que devuelve el CNE. Al guardar, se actualizan solo los campos diferentes.
+                </div>
+
+                {[
+                  { label: 'Nombres completos', key: 'nombres' },
+                  { label: 'Apellidos completos', key: 'apellidos' },
+                  { label: 'Fecha de nacimiento', key: 'fecha_cumpleanos' },
+                ].map(({ label, key }) => {
+                  const actual = modalCNE.empleado?.[key] || '—'
+                  const propuesto = modalCNE.propuesta?.[key] || '—'
+                  const igual = String(actual).trim().toUpperCase() === String(propuesto).trim().toUpperCase()
+                  return (
+                    <div key={key} style={{ marginBottom: 12, padding: 12, background: igual ? '#f1f5f9' : '#fefce8', borderRadius: 8, border: igual ? '1px solid #e2e8f0' : '1px solid #facc15' }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, marginBottom: 2 }}>ACTUAL</div>
+                          <div style={{ color: '#475569', fontWeight: 600 }}>{actual}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: '#0e7490', fontWeight: 700, marginBottom: 2 }}>CNE</div>
+                          <div style={{ color: igual ? '#475569' : '#92400e', fontWeight: igual ? 600 : 800 }}>{propuesto} {igual && '✓'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {modalCNE.datos?.cne && (
+                  <details style={{ marginTop: 8, marginBottom: 14, fontSize: 12, color: '#64748b' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 700, color: '#475569' }}>Otros datos del CNE (no se guardan aún)</summary>
+                    <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', borderRadius: 6, lineHeight: 1.7 }}>
+                      <div><strong>RIF:</strong> {modalCNE.datos.rif || '—'}</div>
+                      <div><strong>Estado:</strong> {modalCNE.datos.cne.estado || '—'}</div>
+                      <div><strong>Municipio:</strong> {modalCNE.datos.cne.municipio || '—'}</div>
+                      <div><strong>Parroquia:</strong> {modalCNE.datos.cne.parroquia || '—'}</div>
+                      <div><strong>Centro electoral:</strong> {modalCNE.datos.cne.centro_electoral || '—'}</div>
+                    </div>
+                  </details>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <button onClick={cerrarModalCNE} disabled={modalCNE.guardando}
+                    style={{ flex: 1, padding: 12, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: modalCNE.guardando ? 'not-allowed' : 'pointer', opacity: modalCNE.guardando ? 0.5 : 1 }}>
+                    Cancelar
+                  </button>
+                  <button onClick={aplicarCNE} disabled={modalCNE.guardando}
+                    style={{ flex: 2, padding: 12, background: '#0e7490', color: 'white', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: modalCNE.guardando ? 'not-allowed' : 'pointer', opacity: modalCNE.guardando ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    {modalCNE.guardando ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando...</> : <><Save size={14} /> Guardar cambios</>}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
