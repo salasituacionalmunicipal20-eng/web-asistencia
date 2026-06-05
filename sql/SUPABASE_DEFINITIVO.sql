@@ -272,12 +272,15 @@ CREATE POLICY "Permitir_Todo_Ausencias" ON ausencias_diarias FOR ALL USING (true
 
 
 -- ============================================================================
--- 8. APP_VERSIONES — release vigente: 1.0.12 (versionCode 13)
+-- 8. APP_VERSIONES — release vigente: 1.0.13 (versionCode 14)
 -- ============================================================================
+-- 1.0.13: fix de verificacion biometrica para empleados con clave del telefono
+-- alfanumerica. Antes el toggle se deshabilitaba si no tenian huella registrada
+-- aunque tuvieran PIN/contrasena del telefono — y por eso marcaban sin
+-- verificacion. Ahora el toggle se habilita cuando hay CUALQUIER credencial
+-- de bloqueo del dispositivo (huella, face, PIN numerico, patron o contrasena
+-- con letras), y el BiometricPrompt nativo acepta lo que tenga el empleado.
 -- 1.0.12: agrega la seccion "Foto tipo carnet" en el perfil del empleado.
--- El empleado toma o elige su foto desde la app (camara + galeria) con
--- instrucciones detalladas. Esta foto sera la que se imprima en el carnet
--- institucional generado desde el panel admin (vista Carnets).
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS app_versiones (
     id int PRIMARY KEY DEFAULT 1,
@@ -294,9 +297,9 @@ CREATE POLICY "Permitir_Lectura_Versiones" ON app_versiones FOR SELECT USING (tr
 CREATE POLICY "Permitir_Escritura_Versiones" ON app_versiones FOR ALL USING (true) WITH CHECK (true);
 
 INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
-VALUES (1, 13, '1.0.12',
+VALUES (1, 14, '1.0.13',
     'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-    'Nueva seccion "Foto tipo carnet" en el perfil: el empleado toma o elige su foto desde la app (camara + galeria) con instrucciones detalladas para que salga bien. Esta foto sera la que se imprima en el carnet institucional.',
+    'Empleados sin huella registrada pero con PIN, patron o contrasena del telefono (incluyendo claves con letras) ahora pueden activar la verificacion biometrica. Antes el toggle quedaba deshabilitado por falta de huella y marcaban entrada/salida sin validar identidad.',
     false)
 ON CONFLICT (id) DO UPDATE SET
     version_codigo = EXCLUDED.version_codigo,
