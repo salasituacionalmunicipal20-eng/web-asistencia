@@ -272,8 +272,12 @@ CREATE POLICY "Permitir_Todo_Ausencias" ON ausencias_diarias FOR ALL USING (true
 
 
 -- ============================================================================
--- 8. APP_VERSIONES — release vigente: 1.0.13 (versionCode 14)
+-- 8. APP_VERSIONES — release vigente: 1.0.14 (versionCode 15)
 -- ============================================================================
+-- 1.0.14: recordatorio diario a las 19:02 hora Caracas. Si el empleado tiene
+-- jornada abierta (entrada SI, salida NO) le llega una notificacion al telefono
+-- con vibracion + importancia alta avisandole que esta a punto de incurrir en
+-- falta. Complementa el memorandum automatico que se genera al dia siguiente.
 -- 1.0.13: fix de verificacion biometrica para empleados con clave del telefono
 -- alfanumerica. Antes el toggle se deshabilitaba si no tenian huella registrada
 -- aunque tuvieran PIN/contrasena del telefono — y por eso marcaban sin
@@ -297,9 +301,9 @@ CREATE POLICY "Permitir_Lectura_Versiones" ON app_versiones FOR SELECT USING (tr
 CREATE POLICY "Permitir_Escritura_Versiones" ON app_versiones FOR ALL USING (true) WITH CHECK (true);
 
 INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
-VALUES (1, 14, '1.0.13',
+VALUES (1, 15, '1.0.14',
     'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-    'Empleados sin huella registrada pero con PIN, patron o contrasena del telefono (incluyendo claves con letras) ahora pueden activar la verificacion biometrica. Antes el toggle quedaba deshabilitado por falta de huella y marcaban entrada/salida sin validar identidad.',
+    'Recordatorio diario a las 19:02 hora Venezuela: si no marcaste tu salida ese dia, la app te avisa al telefono con vibracion. Complementa el memorandum automatico del dia siguiente para que tengas chance de marcar antes que se cierre el dia.',
     false)
 ON CONFLICT (id) DO UPDATE SET
     version_codigo = EXCLUDED.version_codigo,
