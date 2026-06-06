@@ -165,7 +165,7 @@ export default function Empleados() {
     apellidos: '',
     departamento: OPCIONES_DEPARTAMENTOS[0],
     cargo: OPCIONES_CARGOS[0],
-    tolerancia_minutos: 15,
+    tolerancia_minutos: 105,
     fecha_cumpleanos: '',
     oficina_id: '',  // sede / lugar de trabajo asignado (geofence)
     rol_principal: 'empleado'  // modulo Cuadrillas: empleado | trabajador_cuadrilla | supervisor_cuadrilla | alcaldesa
@@ -599,7 +599,7 @@ export default function Empleados() {
       cedula: '', nombres: '', apellidos: '',
       departamento: OPCIONES_DEPARTAMENTOS[0],
       cargo: OPCIONES_CARGOS[0],
-      tolerancia_minutos: 15,
+      tolerancia_minutos: 105,
       fecha_cumpleanos: '',
       oficina_id: '',
       rol_principal: 'empleado'
