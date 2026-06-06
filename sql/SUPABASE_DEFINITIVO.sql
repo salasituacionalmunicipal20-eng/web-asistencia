@@ -272,8 +272,15 @@ CREATE POLICY "Permitir_Todo_Ausencias" ON ausencias_diarias FOR ALL USING (true
 
 
 -- ============================================================================
--- 8. APP_VERSIONES — release vigente: 1.0.14 (versionCode 15)
+-- 8. APP_VERSIONES — release vigente: 1.0.15 (versionCode 16)
 -- ============================================================================
+-- 1.0.15: integracion Firebase Cloud Messaging para sistema de Reportes de
+-- Cuadrilla (Fase 1 del modulo). La APK ahora se registra en Firebase con su
+-- token al hacer login, y recibe push notifications al instante cuando la
+-- Alcaldesa/supervisores validan o rechazan reportes (y vice versa cuando un
+-- trabajador envia reporte nuevo). Backend: tablas reportes_cuadrilla,
+-- tipos_actividad, fcm_tokens; columna empleados.rol_principal; Edge Function
+-- enviar-notif-fcm-cuadrilla.
 -- 1.0.14: recordatorio diario a las 19:02 hora Caracas. Si el empleado tiene
 -- jornada abierta (entrada SI, salida NO) le llega una notificacion al telefono
 -- con vibracion + importancia alta avisandole que esta a punto de incurrir en
@@ -301,9 +308,9 @@ CREATE POLICY "Permitir_Lectura_Versiones" ON app_versiones FOR SELECT USING (tr
 CREATE POLICY "Permitir_Escritura_Versiones" ON app_versiones FOR ALL USING (true) WITH CHECK (true);
 
 INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
-VALUES (1, 15, '1.0.14',
+VALUES (1, 16, '1.0.15',
     'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-    'Recordatorio diario a las 19:02 hora Venezuela: si no marcaste tu salida ese dia, la app te avisa al telefono con vibracion. Complementa el memorandum automatico del dia siguiente para que tengas chance de marcar antes que se cierre el dia.',
+    'Soporte para Reportes de Cuadrilla: la app ahora recibe notificaciones push instantaneas para coordinar trabajos de campo (bacheo, limpieza, alumbrado). Mantiene todas las funciones de marcado de asistencia anteriores.',
     false)
 ON CONFLICT (id) DO UPDATE SET
     version_codigo = EXCLUDED.version_codigo,
