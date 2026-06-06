@@ -106,13 +106,11 @@ function App() {
   useEffect(() => {
     if (!sesionActiva) return
     const esSuperAdminLocal = rolUsuario === 'super_admin' || sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
-    const esAlcaldesaLocal = rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla' || esSuperAdminLocal
     const esSoloAlcaldesaLocal = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdminLocal
-    const idsVisibles = new Set(['dashboard', 'configuracion'])
+    const idsVisibles = new Set(['dashboard', 'configuracion', 'cuadrillas'])
     if (!esSoloAlcaldesaLocal) {
       ;['empleados', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
     }
-    if (esAlcaldesaLocal) idsVisibles.add('cuadrillas')
     if (esSuperAdminLocal) { idsVisibles.add('radar'); idsVisibles.add('versiones') }
     if (vistaActual && !idsVisibles.has(vistaActual)) {
       setVistaActual('dashboard')
@@ -236,9 +234,11 @@ function App() {
 
   // Super-admin: solo Carlos puede ver el panel de versiones de app por empleado.
   const esSuperAdmin = rolUsuario === 'super_admin' || sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
-  // Vista Cuadrillas: Alcaldesa + supervisores de cuadrilla. El super-admin
-  // tambien la ve para soporte. Se gatea por la columna `rol` de administradores_web.
-  const esAlcaldesa = rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla' || esSuperAdmin
+  // Vista Cuadrillas: visible para CUALQUIER admin del panel. La auth ya filtra
+  // que solo gente en administradores_web entra, asi que si llego aca puede validar.
+  // Las RPCs (validar_reporte_cuadrilla / rechazar_*) aceptan 'admin', 'alcaldesa',
+  // 'supervisor_cuadrilla' y 'super_admin' - alineado con esta regla.
+  const verCuadrillas = !!sesionActiva
   // Vista reducida: alcaldesa y supervisor_cuadrilla solo ven Panel, Cuadrillas y Configuracion.
   const esSoloAlcaldesa = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdmin
 
@@ -252,8 +252,8 @@ function App() {
       { id: 'reportes', icon: BookOpen, label: 'Reportes' },
       { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
     ]),
-    // Cuadrillas (reportes de campo): visible para alcaldesa, supervisores y super-admin
-    ...(esAlcaldesa ? [
+    // Cuadrillas (reportes de campo): visible para cualquier admin del panel
+    ...(verCuadrillas ? [
       { id: 'cuadrillas', icon: HardHat, label: 'Cuadrillas' }
     ] : []),
     ...(esSoloAlcaldesa ? [] : [
@@ -368,7 +368,7 @@ function App() {
         <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
-        {esAlcaldesa && vistaActual === 'cuadrillas' && (
+        {verCuadrillas && vistaActual === 'cuadrillas' && (
           /* Cuadrillas se monta/desmonta como Radar porque trae mapa Leaflet
               y los tiles se rompen si arranca con display:none. */
           <Cuadrillas rolUsuario={rolUsuario} correoUsuario={sesionActiva?.user?.email} />
