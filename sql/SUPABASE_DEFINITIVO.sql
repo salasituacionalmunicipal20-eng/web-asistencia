@@ -832,3 +832,243 @@ SELECT id, nombre, latitud, longitud, radio_metros FROM oficinas ORDER BY nombre
 --     '0 10 * * *',  -- todos los dias 10:00 UTC = 6:00 AM Caracas
 --     $$SELECT public.generar_memos_sin_salida((CURRENT_DATE - INTERVAL '1 day')::date);$$
 -- );
+
+
+-- ============================================================================
+-- 15. MODULO CUADRILLA (Fase 1) — reportes de trabajos de campo + FCM
+-- ============================================================================
+-- Tablas, indices y RPCs que soportan:
+--   * el panel web Cuadrillas (src/vistas/Cuadrillas.jsx)
+--   * la Edge Function enviar-notif-fcm-cuadrilla
+--   * la APK Android (registro de FCM token + envio de reportes)
+-- Idempotente: corre limpio sobre BD virgen O sobre una que ya tenga partes
+-- creadas a mano (caso actual de produccion).
+-- ============================================================================
+
+-- 15.1 administradores_web: columna rol (control de acceso al panel)
+ALTER TABLE administradores_web
+    ADD COLUMN IF NOT EXISTS rol text NOT NULL DEFAULT 'admin';
+ALTER TABLE administradores_web
+    DROP CONSTRAINT IF EXISTS administradores_web_rol_check;
+ALTER TABLE administradores_web
+    ADD CONSTRAINT administradores_web_rol_check
+    CHECK (rol IN ('admin', 'super_admin', 'alcaldesa', 'supervisor_cuadrilla'));
+
+
+-- 15.2 empleados: columna rol_principal (para que la Edge Function sepa
+-- a quien hacer push cuando entra un reporte nuevo)
+ALTER TABLE empleados
+    ADD COLUMN IF NOT EXISTS rol_principal text DEFAULT 'empleado';
+
+
+-- 15.3 Catalogo de tipos de actividad (editable desde la app de la Alcaldesa,
+-- los "protegido=true" no se pueden borrar para evitar perder serie historica)
+CREATE TABLE IF NOT EXISTS tipos_actividad_cuadrilla (
+    codigo text PRIMARY KEY,
+    nombre text NOT NULL,
+    protegido boolean NOT NULL DEFAULT false,
+    activo boolean NOT NULL DEFAULT true,
+    creado_en timestamp with time zone DEFAULT now()
+);
+ALTER TABLE tipos_actividad_cuadrilla ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_TiposActividad" ON tipos_actividad_cuadrilla;
+CREATE POLICY "Permitir_Todo_TiposActividad" ON tipos_actividad_cuadrilla
+    FOR ALL USING (true) WITH CHECK (true);
+
+INSERT INTO tipos_actividad_cuadrilla (codigo, nombre, protegido, activo) VALUES
+    ('bacheo',              'Bacheo',                false, true),
+    ('limpieza',            'Limpieza',              false, true),
+    ('alumbrado',           'Alumbrado publico',     true,  true),
+    ('recoleccion_basura',  'Recoleccion de basura', false, true),
+    ('poda',                'Poda',                  false, true),
+    ('drenaje',             'Drenaje',               false, true)
+ON CONFLICT (codigo) DO UPDATE SET
+    nombre = EXCLUDED.nombre,
+    protegido = EXCLUDED.protegido,
+    activo = EXCLUDED.activo;
+
+
+-- 15.4 reportes_cuadrilla: tabla principal del modulo (todas las columnas
+-- que LEE Cuadrillas.jsx). Estado pasa por: pendiente -> validado | rechazado.
+CREATE TABLE IF NOT EXISTS reportes_cuadrilla (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    trabajador_cedula text NOT NULL,
+    tipo_actividad_codigo text REFERENCES tipos_actividad_cuadrilla(codigo) ON DELETE SET NULL,
+    descripcion text,
+    direccion text,
+    gps_lat double precision,
+    gps_lng double precision,
+    foto_antes_url text,
+    foto_despues_url text,
+    estado text NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'validado', 'rechazado')),
+    validado_por text,
+    fecha_validacion timestamp with time zone,
+    observaciones_validacion text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reportes_cuadrilla_estado     ON reportes_cuadrilla (estado);
+CREATE INDEX IF NOT EXISTS idx_reportes_cuadrilla_cedula     ON reportes_cuadrilla (trabajador_cedula);
+CREATE INDEX IF NOT EXISTS idx_reportes_cuadrilla_created_at ON reportes_cuadrilla (created_at DESC);
+
+ALTER TABLE reportes_cuadrilla ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_ReportesCuadrilla" ON reportes_cuadrilla;
+CREATE POLICY "Permitir_Todo_ReportesCuadrilla" ON reportes_cuadrilla
+    FOR ALL USING (true) WITH CHECK (true);
+
+
+-- 15.5 fcm_tokens: tokens FCM por dispositivo (la APK los registra al
+-- loguearse). Upsert idempotente por (cedula, device_id NULL-safe).
+CREATE TABLE IF NOT EXISTS fcm_tokens (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    cedula text NOT NULL,
+    token text NOT NULL,
+    device_id text,
+    creado_en timestamp with time zone DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fcm_tokens_unique_cedula_device
+    ON fcm_tokens (cedula, COALESCE(device_id, ''));
+
+ALTER TABLE fcm_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir_Todo_FcmTokens" ON fcm_tokens;
+CREATE POLICY "Permitir_Todo_FcmTokens" ON fcm_tokens
+    FOR ALL USING (true) WITH CHECK (true);
+
+
+-- 15.6 RPC: registrar_fcm_token — la APK la llama tras hacer login.
+-- Idempotente: mismo (cedula, device_id) actualiza el token en vez de duplicar.
+DROP FUNCTION IF EXISTS public.registrar_fcm_token(text, text, text);
+CREATE OR REPLACE FUNCTION public.registrar_fcm_token(
+    p_cedula text,
+    p_token text,
+    p_device_id text DEFAULT NULL
+)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_id uuid;
+    v_ced text := upper(trim(p_cedula));
+BEGIN
+    IF v_ced IS NULL OR length(v_ced) = 0 THEN
+        RAISE EXCEPTION 'cedula es obligatoria';
+    END IF;
+    IF p_token IS NULL OR length(trim(p_token)) = 0 THEN
+        RAISE EXCEPTION 'token es obligatorio';
+    END IF;
+
+    INSERT INTO fcm_tokens (cedula, token, device_id)
+    VALUES (v_ced, p_token, p_device_id)
+    ON CONFLICT (cedula, COALESCE(device_id, ''))
+    DO UPDATE SET token = EXCLUDED.token, creado_en = NOW()
+    RETURNING id INTO v_id;
+
+    RETURN v_id;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.registrar_fcm_token(text, text, text) FROM anon;
+GRANT  EXECUTE ON FUNCTION public.registrar_fcm_token(text, text, text) TO authenticated;
+
+
+-- 15.7 RPC: validar_reporte_cuadrilla — solo correos con rol valido en
+-- administradores_web. El correo NUNCA viene del cliente: se lee del JWT
+-- para evitar suplantacion. SECURITY DEFINER + check explicito de rol.
+DROP FUNCTION IF EXISTS public.validar_reporte_cuadrilla(uuid);
+DROP FUNCTION IF EXISTS public.validar_reporte_cuadrilla(uuid, text);
+CREATE OR REPLACE FUNCTION public.validar_reporte_cuadrilla(
+    p_reporte_id uuid
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_correo text;
+    v_autorizado boolean;
+BEGIN
+    v_correo := auth.jwt() ->> 'email';
+    IF v_correo IS NULL OR length(trim(v_correo)) = 0 THEN
+        RAISE EXCEPTION 'No autenticado';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1 FROM administradores_web
+        WHERE lower(correo) = lower(v_correo)
+          AND COALESCE(activo, true) = true
+          AND rol IN ('alcaldesa', 'supervisor_cuadrilla', 'super_admin', 'admin')
+    ) INTO v_autorizado;
+
+    IF NOT v_autorizado THEN
+        RAISE EXCEPTION 'Sin permisos para validar reportes';
+    END IF;
+
+    UPDATE reportes_cuadrilla
+    SET estado = 'validado',
+        validado_por = v_correo,
+        fecha_validacion = NOW(),
+        updated_at = NOW()
+    WHERE id = p_reporte_id
+      AND estado = 'pendiente';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Reporte no esta pendiente o no existe';
+    END IF;
+
+    RETURN true;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.validar_reporte_cuadrilla(uuid) FROM anon;
+GRANT  EXECUTE ON FUNCTION public.validar_reporte_cuadrilla(uuid) TO authenticated;
+
+
+-- 15.8 RPC: rechazar_reporte_cuadrilla — mismo check, motivo obligatorio.
+DROP FUNCTION IF EXISTS public.rechazar_reporte_cuadrilla(uuid, text);
+DROP FUNCTION IF EXISTS public.rechazar_reporte_cuadrilla(uuid, text, text);
+CREATE OR REPLACE FUNCTION public.rechazar_reporte_cuadrilla(
+    p_reporte_id uuid,
+    p_motivo text
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_correo text;
+    v_autorizado boolean;
+BEGIN
+    v_correo := auth.jwt() ->> 'email';
+    IF v_correo IS NULL OR length(trim(v_correo)) = 0 THEN
+        RAISE EXCEPTION 'No autenticado';
+    END IF;
+
+    IF p_motivo IS NULL OR length(trim(p_motivo)) < 5 THEN
+        RAISE EXCEPTION 'El motivo del rechazo debe tener al menos 5 caracteres';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1 FROM administradores_web
+        WHERE lower(correo) = lower(v_correo)
+          AND COALESCE(activo, true) = true
+          AND rol IN ('alcaldesa', 'supervisor_cuadrilla', 'super_admin', 'admin')
+    ) INTO v_autorizado;
+
+    IF NOT v_autorizado THEN
+        RAISE EXCEPTION 'Sin permisos para rechazar reportes';
+    END IF;
+
+    UPDATE reportes_cuadrilla
+    SET estado = 'rechazado',
+        validado_por = v_correo,
+        fecha_validacion = NOW(),
+        observaciones_validacion = trim(p_motivo),
+        updated_at = NOW()
+    WHERE id = p_reporte_id
+      AND estado = 'pendiente';
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Reporte no esta pendiente o no existe';
+    END IF;
+
+    RETURN true;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.rechazar_reporte_cuadrilla(uuid, text) FROM anon;
+GRANT  EXECUTE ON FUNCTION public.rechazar_reporte_cuadrilla(uuid, text) TO authenticated;
+
+
+-- 15.9 Refresco del schema cache de PostgREST para que las RPCs aparezcan
+-- inmediatamente disponibles sin reiniciar el servicio.
+NOTIFY pgrst, 'reload schema';

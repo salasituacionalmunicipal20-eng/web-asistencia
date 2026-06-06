@@ -8,7 +8,7 @@ export async function verificarAdmin(email) {
 
   const { data, error } = await supabase
     .from('administradores_web')
-    .select('correo, nombre, activo, requiere_cambio_clave')
+    .select('correo, nombre, activo, requiere_cambio_clave, rol')
     .eq('correo', email)
     .maybeSingle()
 
@@ -34,11 +34,13 @@ export async function verificarAdmin(email) {
     }
   }
 
-  // requiere_cambio_clave: si la columna no existe (migracion vieja) el campo
-  // viene undefined -> lo tratamos como false para no bloquear.
+  // requiere_cambio_clave / rol: si la columna no existe (migracion vieja) el
+  // campo viene undefined -> lo tratamos con defaults para no bloquear.
+  // rol valido: 'admin' (default), 'super_admin', 'alcaldesa', 'supervisor_cuadrilla'.
   return {
     admin: true,
     nombre: data.nombre,
-    requiereCambioClave: data.requiere_cambio_clave === true
+    requiereCambioClave: data.requiere_cambio_clave === true,
+    rol: data.rol || 'admin'
   }
 }

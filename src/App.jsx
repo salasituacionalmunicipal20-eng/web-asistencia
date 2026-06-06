@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard, HardHat } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -18,10 +18,12 @@ import Administradores from './vistas/Administradores'
 import VersionesApp from './vistas/VersionesApp'
 import RadarVista from './vistas/Radar'
 import Carnets from './vistas/Carnets'
+import Cuadrillas from './vistas/Cuadrillas'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
   const [sesionActiva, setSesionActiva] = useState(null)
+  const [rolUsuario, setRolUsuario] = useState(null)
   const [cargandoSesion, setCargandoSesion] = useState(true)
   const [vistaActual, setVistaActual] = useState('dashboard')
   // Bandera: si el admin acaba de loguearse y aun tiene requiere_cambio_clave=true,
@@ -44,17 +46,20 @@ function App() {
   const validarSesionAdmin = useCallback(async (session) => {
     if (!session) {
       setSesionActiva(null)
+      setRolUsuario(null)
       setDebeCambiarClave(false)
       return
     }
-    const { admin, motivo, requiereCambioClave } = await verificarAdmin(session.user.email)
+    const { admin, motivo, requiereCambioClave, rol } = await verificarAdmin(session.user.email)
     if (admin) {
       setSesionActiva(session)
+      setRolUsuario(rol || 'admin')
       setDebeCambiarClave(!!requiereCambioClave)
     } else {
       // No autorizado: lo sacamos y dejamos el mensaje en la pantalla de login
       await supabase.auth.signOut().catch(() => {})
       setSesionActiva(null)
+      setRolUsuario(null)
       setDebeCambiarClave(false)
       setErrorLogin(`⛔ ${motivo} Esta plataforma es solo para administradores.`)
     }
@@ -94,6 +99,25 @@ function App() {
     onTimeout: manejarTimeoutInactividad,
     enabled: !!sesionActiva, // solo cuenta cuando hay sesión activa
   })
+
+  // Guard: si el rol cambia y la vistaActual ya no es accesible para el menu
+  // visible, redirigimos a dashboard para evitar dejar al usuario en una vista
+  // a la que perdió permiso (ej. alcaldesa parada en "empleados").
+  useEffect(() => {
+    if (!sesionActiva) return
+    const esSuperAdminLocal = rolUsuario === 'super_admin' || sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
+    const esAlcaldesaLocal = rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla' || esSuperAdminLocal
+    const esSoloAlcaldesaLocal = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdminLocal
+    const idsVisibles = new Set(['dashboard', 'configuracion'])
+    if (!esSoloAlcaldesaLocal) {
+      ;['empleados', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
+    }
+    if (esAlcaldesaLocal) idsVisibles.add('cuadrillas')
+    if (esSuperAdminLocal) { idsVisibles.add('radar'); idsVisibles.add('versiones') }
+    if (vistaActual && !idsVisibles.has(vistaActual)) {
+      setVistaActual('dashboard')
+    }
+  }, [rolUsuario, sesionActiva, vistaActual])
 
   const manejarLoginDirecto = async (e) => {
     e.preventDefault()
@@ -211,18 +235,31 @@ function App() {
   }
 
   // Super-admin: solo Carlos puede ver el panel de versiones de app por empleado.
-  const esSuperAdmin = sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
+  const esSuperAdmin = rolUsuario === 'super_admin' || sesionActiva?.user?.email === 'carlos.linares.es@gmail.com'
+  // Vista Cuadrillas: Alcaldesa + supervisores de cuadrilla. El super-admin
+  // tambien la ve para soporte. Se gatea por la columna `rol` de administradores_web.
+  const esAlcaldesa = rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla' || esSuperAdmin
+  // Vista reducida: alcaldesa y supervisor_cuadrilla solo ven Panel, Cuadrillas y Configuracion.
+  const esSoloAlcaldesa = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdmin
 
   const itemsMenu = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Panel Principal' },
-    { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
-    { id: 'carnets', icon: IdCard, label: 'Carnets' },
-    { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
-    { id: 'memos', icon: FileText, label: 'Memorándums' },
-    { id: 'reportes', icon: BookOpen, label: 'Reportes' },
-    { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
-    { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
-    { id: 'administradores', icon: UserCog, label: 'Administradores' },
+    ...(esSoloAlcaldesa ? [] : [
+      { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
+      { id: 'carnets', icon: IdCard, label: 'Carnets' },
+      { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
+      { id: 'memos', icon: FileText, label: 'Memorándums' },
+      { id: 'reportes', icon: BookOpen, label: 'Reportes' },
+      { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
+    ]),
+    // Cuadrillas (reportes de campo): visible para alcaldesa, supervisores y super-admin
+    ...(esAlcaldesa ? [
+      { id: 'cuadrillas', icon: HardHat, label: 'Cuadrillas' }
+    ] : []),
+    ...(esSoloAlcaldesa ? [] : [
+      { id: 'auditoria', icon: ScrollText, label: 'Auditoria' },
+      { id: 'administradores', icon: UserCog, label: 'Administradores' },
+    ]),
     // Solo visible para super-admin
     ...(esSuperAdmin ? [
       { id: 'radar', icon: Radio, label: 'Radar tiempo real' },
@@ -331,6 +368,11 @@ function App() {
         <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
+        {esAlcaldesa && vistaActual === 'cuadrillas' && (
+          /* Cuadrillas se monta/desmonta como Radar porque trae mapa Leaflet
+              y los tiles se rompen si arranca con display:none. */
+          <Cuadrillas rolUsuario={rolUsuario} correoUsuario={sesionActiva?.user?.email} />
+        )}
         {esSuperAdmin && (
           <>
             {/* Radar se monta/desmonta (no display:none) porque Leaflet
