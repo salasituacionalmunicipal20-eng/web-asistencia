@@ -84,7 +84,56 @@ export default function Empleados() {
     'DIRECCION FORTALECIMIENTO DE PLANES Y PROY. JUVENTUD',
     'DIRECCION DE TURISMO'
   ]
-  const OPCIONES_CARGOS = ['Analista de Datos', 'Jefa', 'Informatico', 'Chofer']
+  // OPCIONES_CARGOS: los 4 originales + nomencladores oficiales de la Alcaldia,
+  // deduplicados (ignorando whitespace y casing). Ordenados alfabeticamente con
+  // localeCompare para que el dropdown sea facil de scanear visualmente.
+  const OPCIONES_CARGOS = [
+    'ABOGADA', 'ABOGADO I', 'AFORADOR', 'AMB.SIMON BOLIVAR', 'AMBULANCIA',
+    'ANALISTA', 'ANALISTA I', 'ANALISTA II', 'ANALISTA III', 'ANALISTA VI',
+    'ANALISTA VII', 'ANALISTA I. DESPACHO', 'ANALISTA INGRESO', 'ANALISTA LIQUIDADOR',
+    'Analista de Datos',
+    'APOYO', 'ARCHIVISTA III', 'ASEADORA', 'ASESOR LEGAL',
+    'ASIC BRISAS', 'ASIST.ADMON', 'ASIST.ADMON I', 'ASIST. ADMON II',
+    'ASIST. OFICINA', 'ASIST.TEC.ADMON', 'ASISTENTE', 'ASISTENTE JURIDICO',
+    'AUTORIDAD UNICA SALUD', 'AUX.OFICINA', 'AUXILIAR',
+    'CAJERA TERMINAL', 'CASO ESPECIAL', 'CHARALLAVE', 'Chofer', 'COCINERA',
+    'COM SER CASA MUJER', 'CONCORD', 'CONTRATACION PUBLICA',
+    'COORD.(E)', 'COORD.AGUA CIST.C.M', 'COORD. EMPRENDIM.', 'COORD. LEGAL',
+    'COORD.PAR.BRISAS', 'COORD.PAR.CHARA', 'COORD. PSICOLOGICA',
+    'COORD. TERMINAL', 'COORD.TERR.ACT. ECON', 'COORDINADOR',
+    'DIR. ENC. CULTURA', 'DIRECCION DE COMUNICACIONES',
+    'DIRECTOR', 'DIRECTOR (A) EMPREND.', 'DIRECTOR (A) HACIENDA',
+    'DIRECTORA', 'DIRECTORA COM.', 'DOCTORA',
+    'EDITOR DE AUDIOV.', 'ENCARGADA', 'ESCRIBIENTE II',
+    'ESTE PERSONAL ESTA A LA ORDEN DE SECRETARIA YULI PEREZ',
+    'FISCAL', 'FISCAL I',
+    'Informatico', 'INSP. URB. I', 'INSP.URB II', 'INSPECTOR', 'INSPECTOR III',
+    'JEFE DIV.AGUAMCR', 'JEFE DIV BRISAS', 'JEFE DIV.PARQ.JAR',
+    'JEFE REC. DES.SOL.', 'JEFE SEG. INTERNA', 'JEFE SERV.GRALES', 'Jefa',
+    'MAD. LAS BRISAS', 'MAMA PANCHA', 'MERCADO', 'MOD. ALI PRIMERA',
+    'MOD. JABILLITO', 'MOD. MAMA BRUNA', 'MOTORIZADO',
+    'NOMINA CONS.DERECHO',
+    'ODONTOL.CURACIRI', 'ORIENTADOR AGRARIO',
+    'PRESIDENTA', 'PROMOTOR AGRARIO I', 'PROMOTORA',
+    'RECEPCIONISTA', 'REPOSO',
+    'SECRET. EJEC.', 'SECRET.EJEC. I', 'SECRET.EJEC.II', 'SECRETARIA',
+    'SECRETARIA EJEC. I', 'SECRETARIO COORD.',
+    'SERV.PUB. II', 'SERV. PUB.COM', 'SERV.PUB.COM II', 'SINDICAL',
+    'SUPERV.MTTO.SERV',
+    'TERAPEUTA', 'TRABAJ. SOCIAL', 'TRASLADO A DIR.REL. FE',
+    'VACACIONES', 'VIGILANTE', 'VIGILANTE EN REGIST.C'
+  ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
+
+  // Rol principal: define si el empleado participa en el modulo Cuadrillas y
+  // si recibe push de FCM cuando entra un reporte nuevo. La Edge Function
+  // enviar-notif-fcm-cuadrilla filtra empleados con rol_principal IN
+  // ('supervisor_cuadrilla','alcaldesa') para mandarles el push.
+  const OPCIONES_ROL_PRINCIPAL = [
+    { valor: 'empleado',             etiqueta: 'Empleado normal (default)' },
+    { valor: 'trabajador_cuadrilla', etiqueta: 'Trabajador de cuadrilla (envia reportes)' },
+    { valor: 'supervisor_cuadrilla', etiqueta: 'Supervisor de cuadrilla (recibe push de nuevos reportes)' },
+    { valor: 'alcaldesa',            etiqueta: 'Alcaldesa (recibe push de nuevos reportes)' }
+  ]
 
   // Estados para los campos de texto estándar (valores por defecto = mas comun)
   const [formulario, setFormulario] = useState({
@@ -95,7 +144,8 @@ export default function Empleados() {
     cargo: OPCIONES_CARGOS[0],
     tolerancia_minutos: 15,
     fecha_cumpleanos: '',
-    oficina_id: ''  // sede / lugar de trabajo asignado (geofence)
+    oficina_id: '',  // sede / lugar de trabajo asignado (geofence)
+    rol_principal: 'empleado'  // modulo Cuadrillas: empleado | trabajador_cuadrilla | supervisor_cuadrilla | alcaldesa
   })
 
   // Lugares de trabajo (sedes) — se carga de la tabla `oficinas` y alimenta
@@ -444,7 +494,8 @@ export default function Empleados() {
       cargo: empleado.cargo,
       tolerancia_minutos: empleado.tolerancia_minutos,
       fecha_cumpleanos: empleado.fecha_cumpleanos || '',
-      oficina_id: empleado.oficina_id || ''
+      oficina_id: empleado.oficina_id || '',
+      rol_principal: empleado.rol_principal || 'empleado'
     })
 
     const entrada = desglosarHoraA12h(empleado.hora_entrada)
@@ -469,7 +520,8 @@ export default function Empleados() {
       cargo: OPCIONES_CARGOS[0],
       tolerancia_minutos: 15,
       fecha_cumpleanos: '',
-      oficina_id: ''
+      oficina_id: '',
+      rol_principal: 'empleado'
     })
     setEntHora('07')
     setEntMinuto('00')
@@ -629,6 +681,19 @@ export default function Empleados() {
           </div>
 
           <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#b45309', marginBottom: '8px', textTransform: 'uppercase' }}>
+              🦺 Tipo de Rol (Cuadrillas)
+            </label>
+            <select name="rol_principal" value={formulario.rol_principal || 'empleado'} onChange={manejarCambio} required
+              style={{ ...estiloInputBase, borderColor: '#fbbf24', backgroundColor: '#fffbeb', color: '#92400e', fontWeight: 700 }}>
+              {OPCIONES_ROL_PRINCIPAL.map(r => <option key={r.valor} value={r.valor}>{r.etiqueta}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: '#92400e', fontWeight: 600, marginTop: 4 }}>
+              Define si el empleado participa en el módulo Cuadrillas. <strong>Supervisores</strong> y <strong>Alcaldesa</strong> reciben notificación push cuando entra un reporte nuevo.
+            </div>
+          </div>
+
+          <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' }}>
               Tolerancia (Minutos)
             </label>
@@ -741,6 +806,11 @@ export default function Empleados() {
                         </div>
                       )}
                       <span>{emp?.nombres} {emp?.apellidos}{emp.activo === false ? ' (Inactivo)' : ''}</span>
+                      {emp.rol_principal && emp.rol_principal !== 'empleado' && (
+                        <span style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24', borderRadius: 10, padding: '3px 8px', fontSize: 10, fontWeight: 800, marginLeft: 8 }}>
+                          {emp.rol_principal === 'trabajador_cuadrilla' ? '🦺 Cuadrilla' : emp.rol_principal === 'supervisor_cuadrilla' ? '🦺 Supervisor' : emp.rol_principal === 'alcaldesa' ? '🦺 Alcaldesa' : ''}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td style={{ padding: '15px 20px', color: '#64748b' }}>
