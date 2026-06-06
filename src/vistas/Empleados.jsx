@@ -121,7 +121,30 @@ export default function Empleados() {
     'SERV.PUB. II', 'SERV. PUB.COM', 'SERV.PUB.COM II', 'SINDICAL',
     'SUPERV.MTTO.SERV',
     'TERAPEUTA', 'TRABAJ. SOCIAL', 'TRASLADO A DIR.REL. FE',
-    'VACACIONES', 'VIGILANTE', 'VIGILANTE EN REGIST.C'
+    'VACACIONES', 'VIGILANTE', 'VIGILANTE EN REGIST.C',
+    'ASIST. FORMACION INTEGRAL',
+    'ASIST. INGENIERIA III',
+    'ASIST. SERV. GENERALES',
+    'ASIST.ADMON III',
+    'ASIST.TEC.ADMON III',
+    'ASISTENTE ADMINISTRATIVO',
+    'ASISTENTE ADMON',
+    'ASISTENTE DE OFICINA',
+    'CONSEJEROS',
+    'COORD. INSP.OBRAS',
+    'COORD.PLANIF. OBRA',
+    'DIRECTOR/A',
+    'DIRECTORA ( E )',
+    'INSPECTOR DE OBRAS',
+    'SECRETARIA EJECUT.',
+    'SECRETARIA EJECUTIVA',
+    'SECRETARIA I',
+    'SECRETARIA TECNICA',
+    'SECRETARIO COORDINADOR',
+    'SECRETARIO(A)',
+    'SERV.PUB.CULTURAL',
+    'SERVIDOR PUBLICO COMUNITARIO',
+    'TRABAJADOR SOCIAL'
   ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
 
   // Rol principal: define si el empleado participa en el modulo Cuadrillas y
