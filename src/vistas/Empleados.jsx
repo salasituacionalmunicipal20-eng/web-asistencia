@@ -432,6 +432,10 @@ export default function Empleados() {
     propuesta: null,    // { nombres, apellidos, fecha_cumpleanos } sugeridos
     guardando: false,
   })
+  // Autocompletado por cedula en el formulario de Agregar Empleado: reusa el
+  // Edge Function 'consultar-cedula' para prellenar nombres/apellidos/fecha_nac.
+  const [buscandoCedula, setBuscandoCedula] = useState(false)
+  const [errorBusquedaCedula, setErrorBusquedaCedula] = useState('')
   const cerrarModalCNE = () => setModalCNE({ abierto: false, empleado: null, cargando: false, error: '', datos: null, propuesta: null, guardando: false })
 
   const consultarCNE = async (emp) => {
@@ -504,6 +508,60 @@ export default function Empleados() {
     }
     cerrarModalCNE()
     await obtenerEmpleados()
+  }
+
+  // Autocompleta los campos nombres/apellidos/fecha_cumpleanos del formulario
+  // consultando el CNE por la cedula que el operador ya escribio. Mismo Edge
+  // Function que consultarCNE() pero el destino es el state formulario, no un
+  // modal de comparacion.
+  const buscarCedulaParaForm = async () => {
+    const cedulaSoloNumeros = String(formulario.cedula || '').replace(/\D/g, '')
+    if (!cedulaSoloNumeros || cedulaSoloNumeros.length < 5) {
+      setErrorBusquedaCedula('Escribe la cedula primero (solo numeros, 5-9 digitos).')
+      return
+    }
+    setBuscandoCedula(true)
+    setErrorBusquedaCedula('')
+    try {
+      const { data: resp, error: errFn } = await supabase.functions.invoke('consultar-cedula', {
+        body: { cedula: cedulaSoloNumeros },
+      })
+      if (errFn) {
+        setErrorBusquedaCedula(`No se pudo invocar el servicio: ${errFn.message}`)
+        return
+      }
+      if (resp?.error) {
+        const mapa = {
+          RECORD_NOT_FOUND: 'No se encontro esta cedula en el CNE.',
+          INVALID_TOKEN: 'Credenciales de cedula.com.ve invalidas o vencidas.',
+          MISSING_CREDENTIALS: 'Faltan secrets en Supabase (CEDULA_APP_ID/CEDULA_TOKEN).',
+          DB_ERROR: 'El servicio devolvio un error de base de datos.',
+          INVALID_CEDULA: 'Formato invalido (solo numeros, 5-9 digitos).',
+          PROXY_ERROR: 'No se pudo contactar a cedula.com.ve.',
+        }
+        setErrorBusquedaCedula(mapa[resp.error_str] || `Error: ${resp.error_str || 'desconocido'}`)
+        return
+      }
+      const d = resp?.data
+      if (!d) {
+        setErrorBusquedaCedula('Respuesta vacia del servicio.')
+        return
+      }
+      const nombresProp = [d.primer_nombre, d.segundo_nombre].filter(Boolean).join(' ').trim()
+      const apellidosProp = [d.primer_apellido, d.segundo_apellido].filter(Boolean).join(' ').trim()
+      const fechaProp = d.fecha_nac || ''
+      setFormulario(f => ({
+        ...f,
+        nombres: nombresProp || f.nombres,
+        apellidos: apellidosProp || f.apellidos,
+        fecha_cumpleanos: fechaProp || f.fecha_cumpleanos,
+      }))
+      setMensaje({ texto: `Datos prellenados desde el CNE para V-${cedulaSoloNumeros}.`, tipo: 'success' })
+    } catch (e) {
+      setErrorBusquedaCedula(`Error inesperado: ${e.message}`)
+    } finally {
+      setBuscandoCedula(false)
+    }
   }
 
   // Carga un empleado en el formulario para proceder con la edición
@@ -682,7 +740,38 @@ export default function Empleados() {
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '900', color: '#059669', marginBottom: '8px', textTransform: 'uppercase' }}>
               Cédula (Usuario App Android)
             </label>
-            <input type="text" name="cedula" value={formulario.cedula} onChange={manejarCambio} required disabled={!!editandoId} placeholder="Ej: V12345678" style={{ ...estiloInputBase, border: '2px solid #6ee7b7', backgroundColor: editandoId ? '#f1f5f9' : '#ecfdf5', color: '#064e3b' }} />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input type="text" name="cedula" value={formulario.cedula} onChange={manejarCambio} required disabled={!!editandoId} placeholder="Ej: V12345678" style={{ ...estiloInputBase, flex: 1, border: '2px solid #6ee7b7', backgroundColor: editandoId ? '#f1f5f9' : '#ecfdf5', color: '#064e3b' }} />
+              {!editandoId && (
+                <button
+                  type="button"
+                  onClick={buscarCedulaParaForm}
+                  disabled={buscandoCedula}
+                  title="Buscar nombres/apellidos/fecha de nacimiento en el CNE"
+                  style={{
+                    padding: '0 14px',
+                    backgroundColor: buscandoCedula ? '#cbd5e1' : '#0e7490',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: buscandoCedula ? 'wait' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}
+                >
+                  <IdCard size={14} /> {buscandoCedula ? 'Buscando…' : 'Buscar CNE'}
+                </button>
+              )}
+            </div>
+            {errorBusquedaCedula && (
+              <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 700, marginTop: 4 }}>
+                {errorBusquedaCedula}
+              </div>
+            )}
           </div>
           
           <div>
