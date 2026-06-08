@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../supabase'
 import { Save, FileText, Search, UserCheck, Trash2 } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -66,7 +66,15 @@ export default function Memos() {
   const manejarCambio = (e) => setFormulario({ ...formulario, [e.target.name]: e.target.value })
 
   // Lógica del buscador en tiempo real
-  const empleadosFiltrados = empleados.filter(emp => 
+  // Mapa cedula -> nombre completo para mostrar el nombre del destinatario en
+  // la tabla de memos historicos (la tabla `memos` solo guarda empleado_id=cedula).
+  const mapaEmpleados = useMemo(() => {
+    const m = {}
+    for (const e of empleados) m[e.cedula] = `${e.nombres || ''} ${e.apellidos || ''}`.trim()
+    return m
+  }, [empleados])
+
+  const empleadosFiltrados = empleados.filter(emp =>
     `${emp.nombres} ${emp.apellidos} ${emp.cedula}`.toLowerCase().includes(busqueda.toLowerCase())
   )
 
@@ -167,7 +175,7 @@ export default function Memos() {
           <h3 style={{ margin: 0, color: '#1e293b', fontSize: '16px', fontWeight: '800', textTransform: 'uppercase' }}>Historial de Envíos</h3>
           <div style={{ position: 'relative', minWidth: 220 }}>
             <Search size={14} color="#64748b" style={{ position: 'absolute', left: 10, top: 10 }} />
-            <input type="text" value={filtroBusqueda} onChange={e => setFiltroBusqueda(e.target.value)} placeholder="Buscar por cédula o asunto..."
+            <input type="text" value={filtroBusqueda} onChange={e => setFiltroBusqueda(e.target.value)} placeholder="Buscar por nombre, cédula o asunto..."
               style={{ width: '100%', padding: '8px 8px 8px 32px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, color: '#0f172a', backgroundColor: '#f8fafc', fontWeight: 600, boxSizing: 'border-box' }} />
           </div>
         </div>
@@ -176,7 +184,7 @@ export default function Memos() {
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', color: '#475569', fontSize: '12px', textTransform: 'uppercase' }}>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Fecha</th>
-                <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Cédula Destino</th>
+                <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Empleado Destino</th>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Asunto</th>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0' }}>Estatus App</th>
                 <th style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>Accion</th>
@@ -186,11 +194,19 @@ export default function Memos() {
               {lista?.filter(item => {
                 if (!filtroBusqueda) return true
                 const q = filtroBusqueda.toLowerCase()
-                return (item.empleado_id || '').toLowerCase().includes(q) || (item.titulo || '').toLowerCase().includes(q)
+                const nombreEmp = (mapaEmpleados[item.empleado_id] || '').toLowerCase()
+                return (item.empleado_id || '').toLowerCase().includes(q)
+                    || (item.titulo || '').toLowerCase().includes(q)
+                    || nombreEmp.includes(q)
               }).map((item) => (
                 <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px' }}>
                   <td style={{ padding: '15px 20px', fontWeight: '600', color: '#64748b' }}>{String(item?.fecha_emision || '').substring(0,10)}</td>
-                  <td style={{ padding: '15px 20px', fontWeight: '800', color: '#4f46e5' }}>{item?.empleado_id}</td>
+                  <td style={{ padding: '15px 20px' }}>
+                    <div style={{ fontWeight: '700', color: '#0f172a' }}>
+                      {mapaEmpleados[item?.empleado_id] || <span style={{ color: '#94a3b8', fontWeight: 600, fontStyle: 'italic' }}>(empleado eliminado)</span>}
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#4f46e5', marginTop: 2 }}>C.I. {item?.empleado_id}</div>
+                  </td>
                   <td style={{ padding: '15px 20px', color: '#1e293b', fontWeight: '600' }}>{item?.titulo}</td>
                   <td style={{ padding: '15px 20px' }}>
                     <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: '800', backgroundColor: item?.leido ? '#dcfce7' : '#fee2e2', color: item?.leido ? '#16a34a' : '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
