@@ -272,8 +272,16 @@ CREATE POLICY "Permitir_Todo_Ausencias" ON ausencias_diarias FOR ALL USING (true
 
 
 -- ============================================================================
--- 8. APP_VERSIONES — release vigente: 1.0.15 (versionCode 16)
+-- 8. APP_VERSIONES — release vigente: 1.0.16 (versionCode 17)
 -- ============================================================================
+-- 1.0.16: PIN propio de la app de 4 digitos como respaldo cuando el telefono
+-- no tiene biometria (huella/face) ni clave del sistema (PIN/patron/contrasena).
+-- Se gestiona desde Perfil > Seguridad y Preferencias: crear/cambiar pide
+-- confirmar la clave de login + PIN nuevo + repetir; eliminar tambien pide
+-- clave de login. Almacenamiento con EncryptedSharedPreferences (AES-256-GCM)
+-- + SHA-256 con salt y 5000 iteraciones + rate limiting (3 fallidos = 60s,
+-- 6 = 5m, 9+ = 30m). Al marcar entrada/salida con biometria activa, si no hay
+-- nada nativo disponible la app pide el PIN propio antes de ejecutar la marca.
 -- 1.0.15: integracion Firebase Cloud Messaging para sistema de Reportes de
 -- Cuadrilla (Fase 1 del modulo). La APK ahora se registra en Firebase con su
 -- token al hacer login, y recibe push notifications al instante cuando la
@@ -308,9 +316,9 @@ CREATE POLICY "Permitir_Lectura_Versiones" ON app_versiones FOR SELECT USING (tr
 CREATE POLICY "Permitir_Escritura_Versiones" ON app_versiones FOR ALL USING (true) WITH CHECK (true);
 
 INSERT INTO app_versiones (id, version_codigo, version_nombre, apk_url, notas, obligatoria)
-VALUES (1, 16, '1.0.15',
+VALUES (1, 17, '1.0.16',
     'https://salasituacionalmunicipal20-eng.github.io/web-asistencia/AlcaldiaControlAcceso.apk',
-    'Soporte para Reportes de Cuadrilla: la app ahora recibe notificaciones push instantaneas para coordinar trabajos de campo (bacheo, limpieza, alumbrado). Mantiene todas las funciones de marcado de asistencia anteriores.',
+    'PIN propio de la app como respaldo: ahora puedes crear un PIN de 4 digitos para marcar entrada/salida cuando tu telefono no tenga huella, face, PIN o patron configurado. Lo configuras desde Perfil > Seguridad y Preferencias > PIN de respaldo.',
     false)
 ON CONFLICT (id) DO UPDATE SET
     version_codigo = EXCLUDED.version_codigo,
