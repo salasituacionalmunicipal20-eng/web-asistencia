@@ -82,7 +82,8 @@ export default function Empleados() {
     'SECRETARIA COORD. DESARROLLO SOCIAL Y MISIONES',
     'DIRECCION DE EVENTOS, PROTOCOLO Y FERIAS',
     'DIRECCION FORTALECIMIENTO DE PLANES Y PROY. JUVENTUD',
-    'DIRECCION DE TURISMO'
+    'DIRECCION DE TURISMO',
+    'SECRETARIA TRIBUTARIA'
   ]
   // OPCIONES_CARGOS: los 4 originales + nomencladores oficiales de la Alcaldia,
   // deduplicados (ignorando whitespace y casing). Ordenados alfabeticamente con
@@ -144,7 +145,15 @@ export default function Empleados() {
     'SECRETARIO(A)',
     'SERV.PUB.CULTURAL',
     'SERVIDOR PUBLICO COMUNITARIO',
-    'TRABAJADOR SOCIAL'
+    'TRABAJADOR SOCIAL',
+    // Cargos del Listado de Personal de la Alcaldia (jun 2026) — validados 1x1 con el usuario
+    'SEGURIDAD', 'EJECUTIVO ADMON', 'SERV.PUB.C.CUL', 'ASIST.ANALISTA III', 'SERV. PUBLICO',
+    'ANALISTA ADMON', 'AUDITOR I', 'AUDITOR III', 'AUDITOR INTERNO', 'COORD. REG.TEN.TIE',
+    'COORD.S.P', 'SINDICA', 'COORD.RENTAS MPALES', 'ANALISTA RECAUDADOR', 'I.C.A.P.',
+    'JEFE (A)', 'DEFENSOR', 'DEFENSORA', 'ASIST.ANAL.III', 'ASESOR', 'COORD.ADMON DE',
+    'ASESOR (A)', 'COM.DEPORTE', 'COORD. BIENES M', 'COORD. TESORERIA', 'EJECUTIVO LAB.',
+    'ADMINIST. ( E )', 'PROM. CUL. II', 'POLITICAS PUB.', 'ATENCION PUB.', 'PSICOLOGO',
+    'COORD.GEST.CAUJAR', 'DIBUJANTE II'
   ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
 
   // Rol principal: define si el empleado participa en el modulo Cuadrillas y
@@ -167,6 +176,7 @@ export default function Empleados() {
     cargo: OPCIONES_CARGOS[0],
     tolerancia_minutos: 105,
     fecha_cumpleanos: '',
+    telefono: '',
     oficina_id: '',  // sede / lugar de trabajo asignado (geofence)
     rol_principal: 'empleado'  // modulo Cuadrillas: empleado | trabajador_cuadrilla | supervisor_cuadrilla | alcaldesa
   })
@@ -575,6 +585,7 @@ export default function Empleados() {
       cargo: empleado.cargo,
       tolerancia_minutos: empleado.tolerancia_minutos,
       fecha_cumpleanos: empleado.fecha_cumpleanos || '',
+      telefono: empleado.telefono || '',
       oficina_id: empleado.oficina_id || '',
       rol_principal: empleado.rol_principal || 'empleado'
     })
@@ -601,6 +612,7 @@ export default function Empleados() {
       cargo: OPCIONES_CARGOS[0],
       tolerancia_minutos: 105,
       fecha_cumpleanos: '',
+      telefono: '',
       oficina_id: '',
       rol_principal: 'empleado'
     })
@@ -628,6 +640,7 @@ export default function Empleados() {
       hora_salida: horaSalidaFinal,
       // Null si esta vacio, asi la columna queda null (no string vacio que rompe DATE)
       fecha_cumpleanos: formulario.fecha_cumpleanos || null,
+      telefono: formulario.telefono?.trim() || null,
       // oficina_id: '' -> null (no string vacio, eso rompe la FK uuid)
       oficina_id: formulario.oficina_id || null,
     }
@@ -819,6 +832,13 @@ export default function Empleados() {
             <input type="date" name="fecha_cumpleanos" value={formulario.fecha_cumpleanos || ''} onChange={manejarCambio} style={{ ...estiloInputBase, borderColor: '#f9a8d4', backgroundColor: '#fdf2f8', color: '#831843' }} />
           </div>
 
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#0e7490', marginBottom: '8px', textTransform: 'uppercase' }}>
+              📞 Teléfono
+            </label>
+            <input type="tel" name="telefono" value={formulario.telefono || ''} onChange={manejarCambio} placeholder="Ej: 04141234567" style={{ ...estiloInputBase, borderColor: '#67e8f9', backgroundColor: '#ecfeff', color: '#155e75' }} />
+          </div>
+
           <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#0369a1', marginBottom: '8px', textTransform: 'uppercase' }}>
               📍 Lugar de Trabajo (sede con geofence)
@@ -898,6 +918,7 @@ export default function Empleados() {
               <tr style={{ backgroundColor: '#f8fafc', color: '#475569', fontSize: '12px', textTransform: 'uppercase', fontWeight: '800' }}>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Cédula</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Nombre Completo</th>
+                <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Teléfono</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Dirección / Cargo</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Horario Asignado</th>
                 <th style={{ padding: '18px 20px', borderBottom: '2px solid #e2e8f0' }}>Sede</th>
@@ -925,6 +946,7 @@ export default function Empleados() {
                       )}
                     </div>
                   </td>
+                  <td style={{ padding: '15px 20px', color: '#334155', fontWeight: '700' }}>{emp?.telefono || <span style={{ color: '#94a3b8', fontWeight: 600 }}>—</span>}</td>
                   <td style={{ padding: '15px 20px', color: '#64748b' }}>
                     <div style={{ fontWeight: '800', color: '#334155' }}>{emp?.departamento}</div>
                     <div style={{ fontSize: '12px', fontWeight: '600' }}>{emp?.cargo}</div>
@@ -963,14 +985,14 @@ export default function Empleados() {
                 </tr>
               ))}
               {cargandoLista && listaEmpleados.length === 0 && (
-                <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando listado...</td></tr>
+                <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Cargando listado...</td></tr>
               )}
               {!cargandoLista && errorLista && (
-                <tr><td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
+                <tr><td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#ef4444', fontWeight: 700, backgroundColor: '#fef2f2' }}>⛔ {errorLista}</td></tr>
               )}
               {!cargandoLista && !errorLista && listaEmpleados.length === 0 && (
                 <tr>
-                  <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
+                  <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
                 </tr>
               )}
             </tbody>

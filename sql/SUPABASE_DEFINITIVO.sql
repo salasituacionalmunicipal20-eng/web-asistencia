@@ -105,6 +105,7 @@ ALTER TABLE empleados ADD COLUMN IF NOT EXISTS fecha_cumpleanos date;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_version_nombre text;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_version_codigo int;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_ultimo_ping timestamp with time zone;
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS telefono text;
 
 UPDATE empleados SET clave_hash = extensions.crypt(clave, extensions.gen_salt('bf', 10))
 WHERE clave_hash IS NULL AND clave IS NOT NULL;
@@ -607,6 +608,43 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION public.importar_empleado(text, text, text, text, text, time, time, int, text) TO anon, authenticated;
+
+-- Carga del Listado del Personal de la Alcaldia. A diferencia de importar_empleado,
+-- si la cedula YA existe NO pisa sus datos: solo actualiza telefono y rellena vacios.
+CREATE OR REPLACE FUNCTION public.cargar_empleado_personal(
+    p_cedula text, p_nombres text, p_apellidos text,
+    p_departamento text, p_cargo text,
+    p_telefono text DEFAULT NULL, p_fecha_nac date DEFAULT NULL,
+    p_hora_entrada time DEFAULT '08:00:00', p_hora_salida time DEFAULT '17:00:00',
+    p_clave_inicial text DEFAULT '123456')
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
+DECLARE v_existe boolean; v_ced text := upper(trim(p_cedula));
+BEGIN
+    SELECT EXISTS(SELECT 1 FROM empleados WHERE cedula = v_ced) INTO v_existe;
+    IF v_existe THEN
+        UPDATE empleados SET
+            telefono         = COALESCE(p_telefono, telefono),
+            nombres          = COALESCE(NULLIF(nombres, ''), p_nombres),
+            apellidos        = COALESCE(NULLIF(apellidos, ''), p_apellidos),
+            departamento     = COALESCE(NULLIF(departamento, ''), p_departamento),
+            cargo            = COALESCE(NULLIF(cargo, ''), p_cargo),
+            fecha_cumpleanos = COALESCE(fecha_cumpleanos, p_fecha_nac)
+        WHERE cedula = v_ced;
+        RETURN 'EXISTIA (solo telefono/faltantes)';
+    ELSE
+        INSERT INTO empleados (cedula, nombres, apellidos, departamento, cargo,
+            telefono, fecha_cumpleanos, hora_entrada, hora_salida, tolerancia_minutos,
+            clave_hash, clave_actual_cifrada, requiere_cambio_clave)
+        VALUES (v_ced, p_nombres, p_apellidos, p_departamento, p_cargo,
+            p_telefono, p_fecha_nac, p_hora_entrada, p_hora_salida, 15,
+            crypt(p_clave_inicial, gen_salt('bf', 10)),
+            pgp_sym_encrypt(p_clave_inicial, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+            true);
+        RETURN 'CREADO';
+    END IF;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.cargar_empleado_personal(text,text,text,text,text,text,date,time,time,text) TO anon, authenticated;
 
 
 CREATE OR REPLACE FUNCTION public.actualizar_cumpleanos(p_cedula text, p_fecha date)
