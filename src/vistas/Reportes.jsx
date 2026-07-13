@@ -29,6 +29,19 @@ export default function Reportes() {
         <p style={{ margin: 0, fontSize: 14, opacity: 0.9 }}>Horas trabajadas, ausencias, ranking de puntualidad y patrones por dia.</p>
       </div>
 
+      {/* DESCARGA DIRECTA DEL REPORTE DE ASISTENCIA (PDF alojado en public/) */}
+      <a href={`${import.meta.env.BASE_URL}Asistencia_Personal_2026-06-29_al_2026-07-13.pdf`} download
+        style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 20, background: t.bgPanel, border: `1px solid ${t.border}`, borderLeft: `5px solid ${t.exito}`, borderRadius: 12, padding: 16, flexWrap: 'wrap' }}>
+        <div style={{ width: 42, height: 42, borderRadius: 10, background: t.exitoBg, color: t.exito, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+          <Download size={22} />
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontWeight: 800, color: t.text, fontSize: 15 }}>Descargar reporte de asistencia (PDF)</div>
+          <div style={{ fontSize: 13, color: t.textMuted }}>Personal · del 29/06/2026 al 13/07/2026 · nombre, apellido, cédula y marcajes por día.</div>
+        </div>
+        <div style={{ background: t.exito, color: 'white', borderRadius: 8, padding: '9px 16px', fontWeight: 800, fontSize: 13, flex: 'none' }}>Descargar</div>
+      </a>
+
       {/* TABS */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
