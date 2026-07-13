@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff, Eye, AlertTriangle, Copy, IdCard, RefreshCw } from 'lucide-react'
+import { Save, UserPlus, Pencil, X, Users, KeyRound, Upload, Camera, Power, PowerOff, Eye, AlertTriangle, Copy, IdCard, RefreshCw, Search } from 'lucide-react'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Empleados() {
@@ -10,6 +10,7 @@ export default function Empleados() {
   const [errorLista, setErrorLista] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
+  const [busquedaLista, setBusquedaLista] = useState('')
 
   const obtenerEmpleados = useCallback(async () => {
     setCargandoLista(true)
@@ -701,6 +702,13 @@ export default function Empleados() {
   const horasDisponibles = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'))
   const minutosDisponibles = ['00', '15', '30', '45']
 
+  // Filtro de busqueda del listado de servidores publicos (cedula, nombre, cargo, etc.)
+  const _normLista = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const _qLista = _normLista(busquedaLista.trim())
+  const empleadosFiltrados = _qLista
+    ? (listaEmpleados || []).filter(e => _normLista(`${e.cedula || ''} ${e.nombres || ''} ${e.apellidos || ''} ${e.telefono || ''} ${e.departamento || ''} ${e.cargo || ''}`).includes(_qLista))
+    : (listaEmpleados || [])
+
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: isMobile ? '5px' : '0' }}>
       
@@ -909,8 +917,19 @@ export default function Empleados() {
 
       {/* BITÁCORA / LISTADO DE EMPLEADOS REGISTRADOS */}
       <div style={{ backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafafa' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0, color: '#1e293b', fontSize: '16px', fontWeight: '800', textTransform: 'uppercase' }}>Listado Oficial de Servidores Públicos</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+              <input value={busquedaLista} onChange={(e) => setBusquedaLista(e.target.value)} placeholder="Buscar por cédula, nombre o cargo…" aria-label="Buscar servidor público"
+                style={{ padding: '10px 34px 10px 36px', border: '1px solid #cbd5e1', borderRadius: 10, fontSize: 14, width: 300, maxWidth: '72vw', outline: 'none', backgroundColor: 'white', color: '#0f172a' }} />
+              {busquedaLista && (
+                <button onClick={() => setBusquedaLista('')} title="Limpiar búsqueda" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 2, display: 'inline-flex' }}><X size={15} /></button>
+              )}
+            </div>
+            <span style={{ fontSize: 13, color: '#64748b', fontWeight: 700, whiteSpace: 'nowrap' }}>{empleadosFiltrados.length} de {(listaEmpleados || []).length}</span>
+          </div>
         </div>
         <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '750px' }}>
@@ -926,7 +945,7 @@ export default function Empleados() {
               </tr>
             </thead>
             <tbody>
-              {listaEmpleados?.map((emp) => (
+              {empleadosFiltrados.map((emp) => (
                 <tr key={emp.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '14px', backgroundColor: editandoId === emp.id ? '#ecfdf5' : (emp.activo === false ? '#fef2f2' : 'transparent'), opacity: emp.activo === false ? 0.6 : 1 }}>
                   <td style={{ padding: '15px 20px', fontWeight: '800', color: '#10b981' }}>{emp?.cedula}</td>
                   <td style={{ padding: '15px 20px', color: '#1e293b', fontWeight: '700' }}>
@@ -993,6 +1012,11 @@ export default function Empleados() {
               {!cargandoLista && !errorLista && listaEmpleados.length === 0 && (
                 <tr>
                   <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>No existen empleados registrados en el sistema de la Alcaldía.</td>
+                </tr>
+              )}
+              {!cargandoLista && !errorLista && listaEmpleados.length > 0 && empleadosFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan="7" style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontWeight: '600' }}>No se encontró ningún servidor público con “{busquedaLista}”. Prueba otro término.</td>
                 </tr>
               )}
             </tbody>
