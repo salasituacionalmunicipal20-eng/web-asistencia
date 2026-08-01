@@ -179,7 +179,8 @@ export default function Empleados() {
     fecha_cumpleanos: '',
     telefono: '',
     oficina_id: '',  // sede / lugar de trabajo asignado (geofence)
-    rol_principal: 'empleado'  // modulo Cuadrillas: empleado | trabajador_cuadrilla | supervisor_cuadrilla | alcaldesa
+    rol_principal: 'empleado',  // modulo Cuadrillas: empleado | trabajador_cuadrilla | supervisor_cuadrilla | alcaldesa
+    turno_id: ''  // turno / horario asignado (Hubstaff: turnos asignables)
   })
 
   // Lugares de trabajo (sedes) — se carga de la tabla `oficinas` y alimenta
@@ -205,6 +206,17 @@ export default function Empleados() {
         dedupe.sort((a, b) => a.nombre.localeCompare(b.nombre))
         setOficinas(dedupe)
       })
+    return () => { cancelado = true }
+  }, [])
+
+  // Turnos (horarios) asignables — de la tabla `turnos`, solo activos. Alimenta el
+  // select "Turno asignado" del form. Si se elige un turno, su horario manda.
+  const [turnos, setTurnos] = useState([])
+  useEffect(() => {
+    let cancelado = false
+    supabase.from('turnos').select('id, nombre, hora_entrada, hora_salida, tolerancia_minutos, activo')
+      .order('nombre', { ascending: true })
+      .then(({ data }) => { if (!cancelado) setTurnos((data || []).filter(tn => tn.activo !== false)) })
     return () => { cancelado = true }
   }, [])
 
@@ -588,7 +600,8 @@ export default function Empleados() {
       fecha_cumpleanos: empleado.fecha_cumpleanos || '',
       telefono: empleado.telefono || '',
       oficina_id: empleado.oficina_id || '',
-      rol_principal: empleado.rol_principal || 'empleado'
+      rol_principal: empleado.rol_principal || 'empleado',
+      turno_id: empleado.turno_id || ''
     })
 
     const entrada = desglosarHoraA12h(empleado.hora_entrada)
@@ -615,7 +628,8 @@ export default function Empleados() {
       fecha_cumpleanos: '',
       telefono: '',
       oficina_id: '',
-      rol_principal: 'empleado'
+      rol_principal: 'empleado',
+      turno_id: ''
     })
     setEntHora('07')
     setEntMinuto('00')
@@ -644,6 +658,7 @@ export default function Empleados() {
       telefono: formulario.telefono?.trim() || null,
       // oficina_id: '' -> null (no string vacio, eso rompe la FK uuid)
       oficina_id: formulario.oficina_id || null,
+      turno_id: formulario.turno_id || null,   // '' -> null (FK uuid)
     }
 
     const { error: resultadoError } = editandoId
@@ -862,6 +877,24 @@ export default function Empleados() {
             </select>
             <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
               El empleado solo podrá marcar asistencia desde esta sede. Para agregar/editar sedes ve a <strong>Configuración → Sedes / Geofence</strong>.
+            </div>
+          </div>
+
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#7c3aed', marginBottom: '8px', textTransform: 'uppercase' }}>
+              🕒 Turno asignado (horario)
+            </label>
+            <select name="turno_id" value={formulario.turno_id || ''} onChange={manejarCambio}
+              style={{ ...estiloInputBase, borderColor: '#c4b5fd', backgroundColor: '#f5f3ff', color: '#4c1d95', fontWeight: 700 }}>
+              <option value="">— Horario propio (definido abajo) —</option>
+              {turnos.map(tn => (
+                <option key={tn.id} value={tn.id}>
+                  {tn.nombre} · {String(tn.hora_entrada || '').slice(0, 5)}–{String(tn.hora_salida || '').slice(0, 5)}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
+              Opcional. Si eliges un turno, ese es el horario de referencia del empleado. Los turnos se crean en <strong>Configuración → Turnos</strong>.
             </div>
           </div>
 

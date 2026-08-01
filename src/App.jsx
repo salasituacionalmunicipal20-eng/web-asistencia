@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard, HardHat } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard, HardHat, CalendarClock, Timer, Wallet } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -19,6 +19,9 @@ import VersionesApp from './vistas/VersionesApp'
 import RadarVista from './vistas/Radar'
 import Carnets from './vistas/Carnets'
 import Cuadrillas from './vistas/Cuadrillas'
+import Timesheets from './vistas/Timesheets'
+import TiempoTareas from './vistas/TiempoTareas'
+import Nomina from './vistas/Nomina'
 
 function App() {
   const { tema, toggle: toggleTema, t } = useTema()
@@ -109,7 +112,7 @@ function App() {
     const esSoloAlcaldesaLocal = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdminLocal
     const idsVisibles = new Set(['dashboard', 'configuracion', 'cuadrillas'])
     if (!esSoloAlcaldesaLocal) {
-      ;['empleados', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
+      ;['empleados', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'timesheets', 'tiempos', 'nomina', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
     }
     if (esSuperAdminLocal) { idsVisibles.add('radar'); idsVisibles.add('versiones') }
     if (vistaActual && !idsVisibles.has(vistaActual)) {
@@ -209,7 +212,7 @@ function App() {
           {/* Enlace cruzado al otro sistema institucional */}
           <div style={{ marginTop: 18, padding: '12px 14px', background: '#f1f5f9', borderLeft: '3px solid #0a2351', borderRadius: 4, textAlign: 'center', fontSize: 13 }}>
             <span style={{ color: '#475569' }}>¿Buscas la Sala Situacional / Censo?</span><br />
-            <a href="https://salasituacionalmunicipal20-eng.github.io/registro-alcaldia/"
+            <a href="https://salasituacional.alcaldiadecharallave.com/"
                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, color: '#0a2351', fontWeight: 800, textDecoration: 'none', padding: '6px 12px', border: '1px solid #0a2351', borderRadius: 4 }}>
               Ir a Sala Situacional →
             </a>
@@ -251,6 +254,9 @@ function App() {
       { id: 'memos', icon: FileText, label: 'Memorándums' },
       { id: 'reportes', icon: BookOpen, label: 'Reportes' },
       { id: 'vacaciones', icon: Plane, label: 'Vacaciones' },
+      { id: 'timesheets', icon: CalendarClock, label: 'Hojas de tiempo' },
+      { id: 'tiempos', icon: Timer, label: 'Tiempo por tarea' },
+      { id: 'nomina', icon: Wallet, label: 'Nómina' },
     ]),
     // Cuadrillas (reportes de campo): visible para cualquier admin del panel
     ...(verCuadrillas ? [
@@ -366,6 +372,9 @@ function App() {
         <div style={{ display: vistaActual === 'memos' ? 'block' : 'none' }}><Memos /></div>
         <div style={{ display: vistaActual === 'reportes' ? 'block' : 'none' }}><Reportes /></div>
         <div style={{ display: vistaActual === 'vacaciones' ? 'block' : 'none' }}><Vacaciones /></div>
+        <div style={{ display: vistaActual === 'timesheets' ? 'block' : 'none' }}><Timesheets /></div>
+        <div style={{ display: vistaActual === 'tiempos' ? 'block' : 'none' }}><TiempoTareas /></div>
+        <div style={{ display: vistaActual === 'nomina' ? 'block' : 'none' }}><Nomina /></div>
         <div style={{ display: vistaActual === 'auditoria' ? 'block' : 'none' }}><Auditoria /></div>
         <div style={{ display: vistaActual === 'administradores' ? 'block' : 'none' }}><Administradores /></div>
         {verCuadrillas && vistaActual === 'cuadrillas' && (

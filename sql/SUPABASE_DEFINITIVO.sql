@@ -1118,3 +1118,94 @@ GRANT  EXECUTE ON FUNCTION public.rechazar_reporte_cuadrilla(uuid, text) TO auth
 -- 15.9 Refresco del schema cache de PostgREST para que las RPCs aparezcan
 -- inmediatamente disponibles sin reiniciar el servicio.
 NOTIFY pgrst, 'reload schema';
+
+
+-- =====================================================================
+-- 16. HERRAMIENTAS DE EMPLEADOS (estilo Hubstaff)
+-- ---------------------------------------------------------------------
+--   16.1 Turnos asignables + tarifas de nomina (columnas en empleados)
+--   16.2 Hojas de tiempo (timesheets) con aprobacion por periodo
+--   16.3 Cronometro por tarea/proyecto (proyectos, tareas, registros_tiempo)
+--   16.4 Parametros de nomina (umbral de horas extra + multiplicador)
+-- Todo idempotente (seguro correr varias veces). RLS abierto como el resto.
+-- =====================================================================
+
+-- 16.1 Turnos asignables + nomina --------------------------------------
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS turno_id uuid REFERENCES turnos(id) ON DELETE SET NULL;
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS tarifa_hora numeric(12,2);      -- pago por hora (nomina)
+ALTER TABLE empleados ADD COLUMN IF NOT EXISTS sueldo_mensual numeric(12,2);   -- alternativa mensual (informativo)
+
+-- 16.2 Hojas de tiempo: aprobacion por periodo -------------------------
+CREATE TABLE IF NOT EXISTS timesheets_aprobaciones (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empleado_id uuid NOT NULL REFERENCES empleados(id) ON DELETE CASCADE,
+    periodo_inicio date NOT NULL,
+    periodo_fin date NOT NULL,
+    horas_total numeric(10,2) DEFAULT 0,
+    estado text NOT NULL DEFAULT 'pendiente',   -- pendiente | aprobada | rechazada
+    nota text,
+    aprobado_por text,
+    aprobado_en timestamptz,
+    creado_en timestamptz DEFAULT now(),
+    UNIQUE (empleado_id, periodo_inicio, periodo_fin)
+);
+ALTER TABLE timesheets_aprobaciones ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ts_all ON timesheets_aprobaciones;
+CREATE POLICY ts_all ON timesheets_aprobaciones FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_ts_emp ON timesheets_aprobaciones (empleado_id);
+
+-- 16.3 Cronometro por tarea/proyecto -----------------------------------
+CREATE TABLE IF NOT EXISTS proyectos (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre text NOT NULL,
+    descripcion text,
+    color text DEFAULT '#0284c7',
+    activo boolean NOT NULL DEFAULT true,
+    creado_en timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS tareas (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    proyecto_id uuid REFERENCES proyectos(id) ON DELETE CASCADE,
+    nombre text NOT NULL,
+    activa boolean NOT NULL DEFAULT true,
+    creado_en timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS registros_tiempo (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empleado_id uuid REFERENCES empleados(id) ON DELETE SET NULL,
+    cedula text,
+    proyecto_id uuid REFERENCES proyectos(id) ON DELETE SET NULL,
+    tarea_id uuid REFERENCES tareas(id) ON DELETE SET NULL,
+    descripcion text,
+    inicio timestamptz NOT NULL,
+    fin timestamptz,
+    duracion_segundos integer,
+    fecha date,
+    creado_por text,
+    creado_en timestamptz DEFAULT now()
+);
+ALTER TABLE proyectos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE registros_tiempo ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS proyectos_all ON proyectos; CREATE POLICY proyectos_all ON proyectos FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS tareas_all ON tareas;       CREATE POLICY tareas_all ON tareas FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS rt_all ON registros_tiempo; CREATE POLICY rt_all ON registros_tiempo FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_rt_emp ON registros_tiempo (empleado_id);
+CREATE INDEX IF NOT EXISTS idx_rt_fecha ON registros_tiempo (fecha);
+CREATE INDEX IF NOT EXISTS idx_rt_proy ON registros_tiempo (proyecto_id);
+
+-- 16.4 Parametros de nomina (fila unica) -------------------------------
+CREATE TABLE IF NOT EXISTS nomina_config (
+    id smallint PRIMARY KEY DEFAULT 1,
+    horas_dia_normal numeric(5,2) NOT NULL DEFAULT 8,     -- horas/dia antes de contar extra
+    multiplicador_extra numeric(5,2) NOT NULL DEFAULT 1.5,
+    moneda text NOT NULL DEFAULT 'Bs',
+    actualizado_en timestamptz DEFAULT now(),
+    CONSTRAINT nomina_config_single CHECK (id = 1)
+);
+INSERT INTO nomina_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+ALTER TABLE nomina_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS nc_all ON nomina_config;
+CREATE POLICY nc_all ON nomina_config FOR ALL USING (true) WITH CHECK (true);
+
+NOTIFY pgrst, 'reload schema';
