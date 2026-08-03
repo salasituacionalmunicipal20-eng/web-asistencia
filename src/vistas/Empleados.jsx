@@ -175,7 +175,7 @@ export default function Empleados() {
     apellidos: '',
     departamento: OPCIONES_DEPARTAMENTOS[0],
     cargo: OPCIONES_CARGOS[0],
-    tolerancia_minutos: 105,
+    tolerancia_minutos: 90,
     fecha_cumpleanos: '',
     telefono: '',
     oficina_id: '',  // sede / lugar de trabajo asignado (geofence)
@@ -624,7 +624,7 @@ export default function Empleados() {
       cedula: '', nombres: '', apellidos: '',
       departamento: OPCIONES_DEPARTAMENTOS[0],
       cargo: OPCIONES_CARGOS[0],
-      tolerancia_minutos: 105,
+      tolerancia_minutos: 90,
       fecha_cumpleanos: '',
       telefono: '',
       oficina_id: '',
