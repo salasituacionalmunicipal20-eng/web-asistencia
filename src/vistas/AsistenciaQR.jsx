@@ -17,7 +17,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { dibujarHeaderPDF, dibujarFooterPDF } from '../lib/pdfHeader'
-import { QrCode, Download, Copy, Check, FileText, Sheet, RefreshCw, Trash2 } from 'lucide-react'
+import { QrCode, Download, Copy, Check, FileText, Sheet, RefreshCw, Trash2, Pencil, X } from 'lucide-react'
 
 const dosDig = (n) => String(n).padStart(2, '0')
 const hoyLocal = () => {
@@ -58,6 +58,7 @@ export default function AsistenciaQR() {
   const [copiado, setCopiado] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [enVivo, setEnVivo] = useState(false)
+  const [editando, setEditando] = useState(null) // registro abierto en el modal
 
   const url = enlacePublico()
 
@@ -127,6 +128,20 @@ export default function AsistenciaQR() {
     a.href = qr
     a.download = 'qr-asistencia.png'
     a.click()
+  }
+
+  // Guarda un cambio puntual sobre un registro. Se actualiza primero en
+  // pantalla (para que se sienta inmediato) y despues en la base; si la base
+  // rechaza, se recarga y queda lo que realmente esta guardado.
+  const guardarCampos = async (id, cambios) => {
+    setFilas((prev) => prev.map((x) => (x.id === id ? { ...x, ...cambios } : x)))
+    const { error } = await supabase.from('asistencia_qr').update(cambios).eq('id', id)
+    if (error) {
+      window.alert('No se pudo guardar el cambio: ' + error.message)
+      cargar()
+      return false
+    }
+    return true
   }
 
   const borrar = async (r) => {
@@ -352,7 +367,26 @@ export default function AsistenciaQR() {
                   <td style={{ ...td, color: '#94a3b8' }}>{i + 1}</td>
                   <td style={{ ...td, fontWeight: 600 }}>{`${r.nombre || ''} ${r.apellido || ''}`.trim()}</td>
                   <td style={td}>{r.cedula}</td>
-                  <td style={{ ...td, textAlign: 'center' }}>{r.sexo || '—'}</td>
+                  {/* Sexo editable en el sitio: es el dato que mas falta en los
+                      registros viejos y asi se corrige de un solo toque. */}
+                  <td style={{ ...td, textAlign: 'center' }}>
+                    <select
+                      value={r.sexo || ''}
+                      onChange={(e) => guardarCampos(r.id, { sexo: e.target.value || null })}
+                      title="Cambiar el sexo de esta persona"
+                      style={{
+                        padding: '5px 8px', fontSize: 13, borderRadius: 7, cursor: 'pointer',
+                        border: `1px solid ${r.sexo ? '#cbd5e1' : '#f59e0b'}`,
+                        background: r.sexo ? '#fff' : '#fef3c7',
+                        color: r.sexo ? '#0f172a' : '#92400e',
+                        fontWeight: r.sexo ? 400 : 700
+                      }}
+                    >
+                      <option value="">— falta —</option>
+                      <option value="Femenino">Femenino</option>
+                      <option value="Masculino">Masculino</option>
+                    </select>
+                  </td>
                   <td style={td}>{r.telefono || '—'}</td>
                   <td style={td}>{r.municipio || '—'}</td>
                   <td style={td}>{r.comuna || '—'}</td>
@@ -360,7 +394,12 @@ export default function AsistenciaQR() {
                   <td style={td}>{r.ubch || '—'}</td>
                   <td style={td}>{r.cargo || '—'}</td>
                   <td style={{ ...td, textAlign: 'center', fontWeight: 800, color: '#0a2351' }}>{r.hora_entrada}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
+                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      onClick={() => setEditando(r)}
+                      title="Editar este registro"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0284c7', padding: 4 }}
+                    ><Pencil size={16} /></button>
                     <button
                       onClick={() => borrar(r)}
                       title="Quitar de la lista"
@@ -372,6 +411,115 @@ export default function AsistenciaQR() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {editando && (
+        <ModalEditar
+          registro={editando}
+          onCerrar={() => setEditando(null)}
+          onGuardar={async (cambios) => {
+            const ok = await guardarCampos(editando.id, cambios)
+            if (ok) setEditando(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Modal para corregir un registro completo.
+// Se usa cuando hay que arreglar algo mas que el sexo (un nombre mal escrito,
+// una cedula, la hora de entrada). Los cambios viajan por realtime, asi que
+// cualquier otro panel abierto los ve al instante.
+// ============================================================================
+const CAMPOS = [
+  { k: 'nombre', etiqueta: 'Nombre' },
+  { k: 'apellido', etiqueta: 'Apellido' },
+  { k: 'cedula', etiqueta: 'Cédula', modo: 'numeric' },
+  { k: 'sexo', etiqueta: 'Sexo', opciones: ['Femenino', 'Masculino'] },
+  { k: 'telefono', etiqueta: 'Teléfono', modo: 'tel' },
+  { k: 'municipio', etiqueta: 'Municipio' },
+  { k: 'comuna', etiqueta: 'Comuna' },
+  { k: 'comunidad', etiqueta: 'Comunidad' },
+  { k: 'ubch', etiqueta: 'UBCH' },
+  { k: 'cargo', etiqueta: 'Cargo' },
+  { k: 'hora_entrada', etiqueta: 'Hora de entrada', modo: 'time' }
+]
+
+function ModalEditar({ registro, onCerrar, onGuardar }) {
+  const [v, setV] = useState(() => {
+    const o = {}
+    for (const c of CAMPOS) o[c.k] = registro[c.k] || ''
+    return o
+  })
+  const [guardando, setGuardando] = useState(false)
+
+  const enviar = async (e) => {
+    e.preventDefault()
+    if (!v.nombre.trim() || !v.apellido.trim()) { window.alert('El nombre y el apellido no pueden quedar vacíos.'); return }
+    if (!v.hora_entrada) { window.alert('La hora de entrada no puede quedar vacía.'); return }
+    setGuardando(true)
+    const cambios = {}
+    for (const c of CAMPOS) {
+      const val = typeof v[c.k] === 'string' ? v[c.k].trim() : v[c.k]
+      // Los opcionales vacios se guardan como NULL, no como cadena vacia.
+      cambios[c.k] = val || (['nombre', 'apellido', 'cedula', 'hora_entrada'].includes(c.k) ? val : null)
+    }
+    await onGuardar(cambios)
+    setGuardando(false)
+  }
+
+  const campo = { width: '100%', padding: '10px 11px', fontSize: 14.5, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a', boxSizing: 'border-box' }
+
+  return (
+    <div
+      onClick={onCerrar}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 60 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, background: '#fff', borderRadius: '14px 14px 0 0' }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0a2351' }}>Editar registro</div>
+          <button onClick={onCerrar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 4 }}><X size={20} /></button>
+        </div>
+
+        <form onSubmit={enviar} style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {CAMPOS.map((c) => (
+            <div key={c.k}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>
+                {c.etiqueta.toUpperCase()}
+              </label>
+              {c.opciones ? (
+                <select style={campo} value={v[c.k]} onChange={(e) => setV((p) => ({ ...p, [c.k]: e.target.value }))}>
+                  <option value="">— sin indicar —</option>
+                  {c.opciones.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input
+                  style={campo}
+                  type={c.modo === 'time' ? 'time' : 'text'}
+                  inputMode={c.modo === 'numeric' ? 'numeric' : c.modo === 'tel' ? 'tel' : undefined}
+                  value={v[c.k]}
+                  onChange={(e) => setV((p) => ({ ...p, [c.k]: e.target.value }))}
+                />
+              )}
+            </div>
+          ))}
+
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button type="button" onClick={onCerrar}
+              style={{ padding: '11px 18px', fontSize: 14, fontWeight: 700, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, cursor: 'pointer' }}>
+              Cancelar
+            </button>
+            <button type="submit" disabled={guardando}
+              style={{ padding: '11px 22px', fontSize: 14, fontWeight: 800, border: 'none', background: '#0284c7', color: '#fff', borderRadius: 8, cursor: guardando ? 'not-allowed' : 'pointer', opacity: guardando ? .7 : 1 }}>
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
