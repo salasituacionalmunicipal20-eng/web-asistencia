@@ -17,6 +17,10 @@ import { MUNICIPIO_PROPIO, COMUNAS, UBCHS, comunidadesDe, datosDeComunidad } fro
 
 const CNE_ENDPOINT = 'https://tfbzghjjfcaqmkzsxrrs.supabase.co/functions/v1/consultar-cedula'
 
+// Valor centinela del desplegable de municipio. No se guarda nunca: solo sirve
+// para saber que hay que mostrar el campo de texto libre.
+const OTRO_MUNICIPIO = '__OTRO__'
+
 const MUNICIPIOS_MIRANDA = [
   'Acevedo', 'Andrés Bello', 'Baruta', 'Brión', 'Buroz', 'Carrizal', 'Chacao',
   'Cristóbal Rojas', 'El Hatillo', 'Guaicaipuro', 'Independencia', 'Lander',
@@ -32,6 +36,10 @@ const municipioDeLista = (delCne) => {
   if (!buscado) return ''
   return MUNICIPIOS_MIRANDA.find((m) => sinAcentos(m) === buscado) || ''
 }
+
+// El CNE devuelve los nombres en mayusculas; se pasan a Tipo Titulo para que
+// combinen con el resto de la lista de municipios.
+const tituloCase = (s) => (s || '').toLowerCase().replace(/(^|\s|-)([a-záéíóúñ])/g, (_, p, c) => p + c.toUpperCase())
 
 const dosDig = (n) => String(n).padStart(2, '0')
 const ahoraLocal = () => {
@@ -53,6 +61,8 @@ export default function RegistroQR() {
 
   const [cneEstado, setCneEstado] = useState('') // '', 'buscando', 'ok', 'nada', 'error'
   const [cneDatos, setCneDatos] = useState(null)
+  // true cuando el municipio no esta en la lista y se escribe a mano
+  const [muniOtro, setMuniOtro] = useState(false)
 
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }))
 
@@ -62,8 +72,12 @@ export default function RegistroQR() {
 
   // Al cambiar de municipio se limpian comuna/comunidad/UBCH: los de un
   // municipio no aplican al otro y quedarian datos cruzados.
-  const cambiarMunicipio = (e) =>
-    setF((p) => ({ ...p, municipio: e.target.value, comuna: '', comunidad: '', ubch: '' }))
+  const cambiarMunicipio = (e) => {
+    const v = e.target.value
+    const otro = v === OTRO_MUNICIPIO
+    setMuniOtro(otro)
+    setF((p) => ({ ...p, municipio: otro ? '' : v, comuna: '', comunidad: '', ubch: '' }))
+  }
 
   const cambiarComuna = (e) =>
     setF((p) => ({ ...p, comuna: e.target.value, comunidad: '', ubch: '' }))
@@ -94,15 +108,21 @@ export default function RegistroQR() {
 
       const nom = [d.primer_nombre, d.segundo_nombre].filter(Boolean).join(' ').trim()
       const ape = [d.primer_apellido, d.segundo_apellido].filter(Boolean).join(' ').trim()
-      const muni = municipioDeLista(d.cne?.municipio)
+      const muniCne = ((d.cne && d.cne.municipio) || '').trim()
+      const muni = municipioDeLista(muniCne)
+      // Si vota fuera de Miranda, el municipio no esta en la lista: se pasa a
+      // "Otro" y se escribe el nombre que dio el CNE, para no perder el dato.
+      const fueraDeLista = !muni && !!muniCne
+      const municipioVacio = !f.municipio
 
-      // Solo se rellena lo que este vacio: si la persona ya escribio algo, manda ella.
       setF((prev) => ({
         ...prev,
+        // Solo se rellena lo que este vacio: si la persona ya escribio algo, manda ella.
         nombre: prev.nombre.trim() ? prev.nombre : nom,
         apellido: prev.apellido.trim() ? prev.apellido : ape,
-        municipio: prev.municipio ? prev.municipio : muni
+        municipio: prev.municipio ? prev.municipio : (muni || (fueraDeLista ? tituloCase(muniCne) : ''))
       }))
+      if (fueraDeLista && municipioVacio) setMuniOtro(true)
       setCneDatos(d)
       setCneEstado('ok')
     } catch {
@@ -278,10 +298,21 @@ export default function RegistroQR() {
           <input style={S.input} value={f.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="tel" placeholder="0412-1234567" />
 
           <label style={S.label}>Municipio</label>
-          <select style={S.input} value={f.municipio} onChange={cambiarMunicipio}>
+          <select style={S.input} value={muniOtro ? OTRO_MUNICIPIO : f.municipio} onChange={cambiarMunicipio}>
             <option value="">Selecciona…</option>
             {MUNICIPIOS_MIRANDA.map((m) => <option key={m} value={m}>{m}</option>)}
+            <option value={OTRO_MUNICIPIO}>Otro (no aparece en la lista)</option>
           </select>
+          {muniOtro && (
+            <input
+              style={{ ...S.input, marginTop: 8 }}
+              value={f.municipio}
+              onChange={set('municipio')}
+              autoCapitalize="words"
+              placeholder="Escribe tu municipio"
+              autoFocus
+            />
+          )}
 
           {esPropio ? (
             <>
