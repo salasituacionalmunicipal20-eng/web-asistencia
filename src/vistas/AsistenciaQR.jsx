@@ -111,11 +111,13 @@ export default function AsistenciaQR() {
       startY: y + 4,
       // Municipio, comuna y comunidad van juntos en una sola columna: separados
       // no caben en la hoja sin dejar las firmas demasiado angostas para firmar.
-      head: [['Nº', 'Nombre y apellido', 'Cédula', 'Teléfono', 'UBCH', 'Municipio / Comuna / Comunidad', 'Cargo', 'Entrada', 'Firma entrada', 'Salida', 'Firma salida']],
+      head: [['Nº', 'Nombre y apellido', 'Cédula', 'Sexo', 'Teléfono', 'UBCH', 'Municipio / Comuna / Comunidad', 'Cargo', 'Entrada', 'Firma entrada', 'Salida', 'Firma salida']],
       body: visibles.map((r, i) => ([
         String(i + 1),
         `${r.nombre || ''} ${r.apellido || ''}`.trim(),
         r.cedula || '',
+        // Abreviado: la columna completa no cabe sin robarle ancho a las firmas.
+        r.sexo === 'Femenino' ? 'F' : r.sexo === 'Masculino' ? 'M' : '',
         r.telefono || '',
         r.ubch || '',
         [r.municipio, r.comuna, r.comunidad].filter(Boolean).join(' · '),
@@ -135,20 +137,21 @@ export default function AsistenciaQR() {
       // que volver a cuadrarlos o la tabla se sale de la hoja.
       // El telefono necesita 23 mm: con menos, un numero tipo 0424-1234567 se
       // parte en dos lineas y la planilla se ve sucia.
-      // Nº y Entrada llevan 9 y 17 mm porque con menos el propio TITULO de la
-      // columna se parte en dos lineas ("N/º", "Entrad/a") y se ve descuidado.
+      // Nº, Sexo y Entrada llevan 9, 11 y 17 mm porque con menos el propio
+      // TITULO de la columna se parte en dos lineas y se ve descuidado.
       columnStyles: {
         0: { cellWidth: 9, halign: 'center' },
-        1: { cellWidth: 35 },
+        1: { cellWidth: 32 },
         2: { cellWidth: 18, halign: 'center' },
-        3: { cellWidth: 23, halign: 'center' },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 30 },
-        6: { cellWidth: 23 },
-        7: { cellWidth: 17, halign: 'center', fontStyle: 'bold' },
-        8: { cellWidth: 29, fillColor: [255, 255, 255] },
-        9: { cellWidth: 13, fillColor: [255, 255, 255] },
-        10: { cellWidth: 29, fillColor: [255, 255, 255] }
+        3: { cellWidth: 11, halign: 'center', fontStyle: 'bold' },
+        4: { cellWidth: 23, halign: 'center' },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 26 },
+        7: { cellWidth: 23 },
+        8: { cellWidth: 17, halign: 'center', fontStyle: 'bold' },
+        9: { cellWidth: 27, fillColor: [255, 255, 255] },
+        10: { cellWidth: 13, fillColor: [255, 255, 255] },
+        11: { cellWidth: 27, fillColor: [255, 255, 255] }
       },
       didDrawPage: () => dibujarFooterPDF(doc)
     })
@@ -176,6 +179,7 @@ export default function AsistenciaQR() {
       'Nombre': r.nombre || '',
       'Apellido': r.apellido || '',
       'Cédula': r.cedula || '',
+      'Sexo': r.sexo || '',
       'Teléfono': r.telefono || '',
       'Municipio': r.municipio || '',
       'Comuna': r.comuna || '',
@@ -186,7 +190,7 @@ export default function AsistenciaQR() {
       'Hora de salida': r.hora_salida || ''
     }))
     const ws = XLSX.utils.json_to_sheet(datos)
-    ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 13 }, { wch: 15 }, { wch: 16 }, { wch: 20 }, { wch: 22 }, { wch: 26 }, { wch: 24 }, { wch: 15 }, { wch: 15 }]
+    ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 13 }, { wch: 11 }, { wch: 15 }, { wch: 16 }, { wch: 20 }, { wch: 22 }, { wch: 26 }, { wch: 24 }, { wch: 15 }, { wch: 15 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Asistencia')
     XLSX.writeFile(wb, `asistencia-qr-${fecha}.xlsx`)
@@ -256,12 +260,13 @@ export default function AsistenciaQR() {
           {cargando ? 'Cargando…' : `${visibles.length} registro(s) · ${fechaLarga(fecha)}`}
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1110 }}>
             <thead>
               <tr>
                 <th style={th}>Nº</th>
                 <th style={th}>Nombre y apellido</th>
                 <th style={th}>Cédula</th>
+                <th style={{ ...th, textAlign: 'center' }}>Sexo</th>
                 <th style={th}>Teléfono</th>
                 <th style={th}>Municipio</th>
                 <th style={th}>Comuna</th>
@@ -274,7 +279,7 @@ export default function AsistenciaQR() {
             </thead>
             <tbody>
               {!cargando && visibles.length === 0 && (
-                <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#94a3b8', padding: '34px 12px' }}>
+                <tr><td colSpan={12} style={{ ...td, textAlign: 'center', color: '#94a3b8', padding: '34px 12px' }}>
                   Nadie se ha registrado en esta fecha todavía.
                 </td></tr>
               )}
@@ -283,6 +288,7 @@ export default function AsistenciaQR() {
                   <td style={{ ...td, color: '#94a3b8' }}>{i + 1}</td>
                   <td style={{ ...td, fontWeight: 600 }}>{`${r.nombre || ''} ${r.apellido || ''}`.trim()}</td>
                   <td style={td}>{r.cedula}</td>
+                  <td style={{ ...td, textAlign: 'center' }}>{r.sexo || '—'}</td>
                   <td style={td}>{r.telefono || '—'}</td>
                   <td style={td}>{r.municipio || '—'}</td>
                   <td style={td}>{r.comuna || '—'}</td>

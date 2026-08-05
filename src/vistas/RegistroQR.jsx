@@ -41,7 +41,7 @@ const ahoraLocal = () => {
   }
 }
 
-const VACIO = { nombre: '', apellido: '', cedula: '', telefono: '', municipio: '', comuna: '', comunidad: '', ubch: '', cargo: '' }
+const VACIO = { nombre: '', apellido: '', cedula: '', sexo: '', telefono: '', municipio: '', comuna: '', comunidad: '', ubch: '', cargo: '' }
 
 export default function RegistroQR() {
   const [f, setF] = useState(VACIO)
@@ -107,6 +107,7 @@ export default function RegistroQR() {
     const { fecha, hora } = ahoraLocal()
     const { error: err } = await supabase.from('asistencia_qr').insert({
       nombre, apellido, cedula,
+      sexo: f.sexo || null,
       telefono: f.telefono.trim() || null,
       municipio: f.municipio || null,
       comuna: f.comuna.trim() || null,
@@ -245,6 +246,13 @@ export default function RegistroQR() {
 
           <label style={S.label}>Apellido *</label>
           <input style={S.input} value={f.apellido} onChange={set('apellido')} autoComplete="family-name" autoCapitalize="words" />
+
+          <label style={S.label}>Sexo</label>
+          <select style={S.input} value={f.sexo} onChange={set('sexo')}>
+            <option value="">Selecciona…</option>
+            <option value="Femenino">Femenino</option>
+            <option value="Masculino">Masculino</option>
+          </select>
 
           <label style={S.label}>Teléfono</label>
           <input style={S.input} value={f.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="tel" placeholder="0412-1234567" />

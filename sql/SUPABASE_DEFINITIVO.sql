@@ -1227,6 +1227,7 @@ CREATE TABLE IF NOT EXISTS asistencia_qr (
     nombre       text NOT NULL,
     apellido     text NOT NULL,
     cedula       text NOT NULL,
+    sexo         text,                   -- 'Femenino' | 'Masculino'
     telefono     text,
     municipio    text,
     comuna       text,
@@ -1256,6 +1257,7 @@ END $$;
 ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS ubch      text;
 ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS comuna    text;
 ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS comunidad text;
+ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS sexo      text;
 
 CREATE INDEX IF NOT EXISTS idx_aqr_fecha  ON asistencia_qr (fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_aqr_cedula ON asistencia_qr (cedula);
