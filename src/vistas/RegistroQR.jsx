@@ -5,11 +5,16 @@
 // el sistema le guarda la hora en que se registro. Es una asistencia aparte
 // del control diario de empleados (tabla asistencia_qr, no asistencia_registros).
 //
-// La hora de SALIDA no se pide aca: queda en blanco a proposito porque se
-// escribe a mano sobre la planilla impresa.
+// Al escribir la cedula se consulta el CNE (misma Edge Function que usa la Sala
+// Situacional) y se autocompletan nombre, apellido y municipio.
+//
+// Pensada para telefono: una sola columna, campos de 16px (menos de eso iOS
+// hace zoom solo al enfocar) y botones altos para el dedo.
 // ============================================================================
 import { useState } from 'react'
 import { supabase } from '../supabase'
+
+const CNE_ENDPOINT = 'https://tfbzghjjfcaqmkzsxrrs.supabase.co/functions/v1/consultar-cedula'
 
 const MUNICIPIOS_MIRANDA = [
   'Acevedo', 'Andrés Bello', 'Baruta', 'Brión', 'Buroz', 'Carrizal', 'Chacao',
@@ -18,8 +23,15 @@ const MUNICIPIOS_MIRANDA = [
   'Sucre', 'Urdaneta', 'Zamora'
 ]
 
-// Hora y fecha del dispositivo. La jornada es presencial y el telefono esta en
-// Venezuela, asi que la hora local del equipo es la correcta.
+// El CNE devuelve el municipio en mayusculas y sin acentos. Se busca el
+// equivalente de la lista para poder seleccionarlo en el desplegable.
+const sinAcentos = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim()
+const municipioDeLista = (delCne) => {
+  const buscado = sinAcentos(delCne)
+  if (!buscado) return ''
+  return MUNICIPIOS_MIRANDA.find((m) => sinAcentos(m) === buscado) || ''
+}
+
 const dosDig = (n) => String(n).padStart(2, '0')
 const ahoraLocal = () => {
   const d = new Date()
@@ -33,12 +45,52 @@ const VACIO = { nombre: '', apellido: '', cedula: '', telefono: '', municipio: '
 
 export default function RegistroQR() {
   const [f, setF] = useState(VACIO)
+  const [nacionalidad, setNacionalidad] = useState('V')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
-  const [listo, setListo] = useState(null) // { hora, nombre }
+  const [listo, setListo] = useState(null)
+
+  const [cneEstado, setCneEstado] = useState('') // '', 'buscando', 'ok', 'nada', 'error'
+  const [cneDatos, setCneDatos] = useState(null)
 
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }))
 
+  // ------------------------------------------------------------- CNE
+  const consultarCNE = async () => {
+    const num = f.cedula.replace(/\D/g, '')
+    if (num.length < 4 || num.length > 10) return
+
+    setCneEstado('buscando'); setCneDatos(null)
+    try {
+      const resp = await fetch(CNE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: num, nacionalidad })
+      })
+      if (!resp.ok) { setCneEstado('error'); return }
+      const json = await resp.json()
+      const d = json && json.data
+      if (!d || json.error) { setCneEstado('nada'); return }
+
+      const nom = [d.primer_nombre, d.segundo_nombre].filter(Boolean).join(' ').trim()
+      const ape = [d.primer_apellido, d.segundo_apellido].filter(Boolean).join(' ').trim()
+      const muni = municipioDeLista(d.cne?.municipio)
+
+      // Solo se rellena lo que este vacio: si la persona ya escribio algo, manda ella.
+      setF((prev) => ({
+        ...prev,
+        nombre: prev.nombre.trim() ? prev.nombre : nom,
+        apellido: prev.apellido.trim() ? prev.apellido : ape,
+        municipio: prev.municipio ? prev.municipio : muni
+      }))
+      setCneDatos(d)
+      setCneEstado('ok')
+    } catch {
+      setCneEstado('error')
+    }
+  }
+
+  // ------------------------------------------------------------- guardar
   const enviar = async (e) => {
     e.preventDefault()
     setError('')
@@ -53,7 +105,7 @@ export default function RegistroQR() {
 
     setEnviando(true)
     const { fecha, hora } = ahoraLocal()
-    const fila = {
+    const { error: err } = await supabase.from('asistencia_qr').insert({
       nombre, apellido, cedula,
       telefono: f.telefono.trim() || null,
       municipio: f.municipio || null,
@@ -63,9 +115,7 @@ export default function RegistroQR() {
       cargo: f.cargo.trim() || null,
       fecha,
       hora_entrada: hora
-    }
-
-    const { error: err } = await supabase.from('asistencia_qr').insert(fila)
+    })
     setEnviando(false)
 
     if (err) {
@@ -73,8 +123,7 @@ export default function RegistroQR() {
       // veces en la misma jornada. Se le avisa en cristiano, no con el error crudo.
       if (err.code === '23505') {
         const { data } = await supabase
-          .from('asistencia_qr')
-          .select('hora_entrada')
+          .from('asistencia_qr').select('hora_entrada')
           .eq('cedula', cedula).eq('fecha', fecha).maybeSingle()
         setError(`Esa cédula ya se registró hoy${data?.hora_entrada ? ` a las ${data.hora_entrada}` : ''}. No hace falta registrarse de nuevo.`)
         return
@@ -86,37 +135,38 @@ export default function RegistroQR() {
     setListo({ hora, nombre: `${nombre} ${apellido}` })
   }
 
-  // ---------------------------------------------------------------- estilos
+  // ------------------------------------------------------------- estilos
   const S = {
-    pantalla: { minHeight: '100vh', background: '#f1f5f9', display: 'flex', justifyContent: 'center', padding: '0 0 40px' },
+    pantalla: { minHeight: '100vh', background: '#f1f5f9', display: 'flex', justifyContent: 'center' },
     caja: { width: '100%', maxWidth: 480, background: '#fff', minHeight: '100vh', boxShadow: '0 0 40px rgba(0,0,0,.08)' },
-    cintillo: { background: '#0a2351', color: '#fff', padding: '22px 20px', textAlign: 'center' },
-    cuerpo: { padding: '22px 20px' },
-    label: { display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', margin: '14px 0 6px' },
-    input: { width: '100%', padding: '13px 12px', fontSize: 16, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
-    boton: { width: '100%', marginTop: 24, padding: '15px', fontSize: 16, fontWeight: 800, color: '#fff', background: '#0284c7', border: 'none', borderRadius: 8, cursor: 'pointer' },
-    error: { marginTop: 16, padding: '12px 14px', background: '#fee2e2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444', borderRadius: 8, color: '#991b1b', fontSize: 14, lineHeight: 1.5 },
-    pie: { textAlign: 'center', fontSize: 12, color: '#64748b', padding: '18px 20px 0' }
+    cintillo: { background: '#0a2351', color: '#fff', padding: '20px 18px', textAlign: 'center' },
+    // textAlign left explicito: el #root global de la app trae text-align:center
+    // y sin esto las etiquetas del formulario salen centradas.
+    cuerpo: { padding: '18px 18px calc(34px + env(safe-area-inset-bottom))', textAlign: 'left' },
+    label: { display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', margin: '15px 0 6px' },
+    input: { width: '100%', minHeight: 48, padding: '12px', fontSize: 16, border: '1px solid #cbd5e1', borderRadius: 10, background: '#fff', color: '#0f172a', boxSizing: 'border-box', WebkitAppearance: 'none' },
+    boton: { width: '100%', marginTop: 26, minHeight: 54, fontSize: 17, fontWeight: 800, color: '#fff', background: '#0284c7', border: 'none', borderRadius: 10 },
+    error: { marginTop: 16, padding: '12px 14px', background: '#fee2e2', border: '1px solid #f87171', borderLeft: '5px solid #ef4444', borderRadius: 10, color: '#991b1b', fontSize: 14, lineHeight: 1.5 }
   }
 
-  // ---------------------------------------------------------------- exito
+  // ------------------------------------------------------------- exito
   if (listo) {
     return (
       <div style={S.pantalla}>
         <div style={S.caja}>
           <div style={S.cintillo}>
-            <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: .5 }}>ALCALDÍA DE CRISTÓBAL ROJAS</div>
+            <div style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: .4 }}>ALCALDÍA DE CRISTÓBAL ROJAS</div>
             <div style={{ fontSize: 12, opacity: .85, marginTop: 3 }}>Charallave · Estado Miranda</div>
           </div>
-          <div style={{ ...S.cuerpo, textAlign: 'center', paddingTop: 44 }}>
+          <div style={{ ...S.cuerpo, textAlign: 'center', paddingTop: 42 }}>
             <div style={{ fontSize: 58 }}>✅</div>
             <h2 style={{ color: '#0a2351', margin: '10px 0 4px', fontSize: 23 }}>¡Asistencia registrada!</h2>
             <p style={{ color: '#475569', fontSize: 15, margin: 0 }}>{listo.nombre}</p>
-            <div style={{ marginTop: 26, padding: '18px', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 12 }}>
-              <div style={{ fontSize: 13, color: '#047857', fontWeight: 700, letterSpacing: .5 }}>HORA DE ENTRADA</div>
+            <div style={{ marginTop: 24, padding: 18, background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 12 }}>
+              <div style={{ fontSize: 12.5, color: '#047857', fontWeight: 700, letterSpacing: .5 }}>HORA DE ENTRADA</div>
               <div style={{ fontSize: 42, fontWeight: 800, color: '#065f46', lineHeight: 1.1, marginTop: 4 }}>{listo.hora}</div>
             </div>
-            <p style={{ color: '#64748b', fontSize: 13.5, marginTop: 24, lineHeight: 1.6 }}>
+            <p style={{ color: '#64748b', fontSize: 13.5, marginTop: 22, lineHeight: 1.6 }}>
               Ya puedes cerrar esta página. La <b>hora de salida</b> se firma al final de la jornada en la planilla impresa.
             </p>
           </div>
@@ -125,29 +175,79 @@ export default function RegistroQR() {
     )
   }
 
-  // ---------------------------------------------------------------- formulario
+  // ------------------------------------------------------------- formulario
+  const cne = cneDatos?.cne || {}
   return (
     <div style={S.pantalla}>
       <div style={S.caja}>
         <div style={S.cintillo}>
-          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: .5 }}>ALCALDÍA DE CRISTÓBAL ROJAS</div>
+          <div style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: .4 }}>ALCALDÍA DE CRISTÓBAL ROJAS</div>
           <div style={{ fontSize: 12, opacity: .85, marginTop: 3 }}>Charallave · Estado Miranda</div>
-          <div style={{ marginTop: 14, fontSize: 19, fontWeight: 800 }}>Registro de asistencia</div>
-          <div style={{ fontSize: 12.5, opacity: .85, marginTop: 4 }}>Llena tus datos. La hora se toma sola.</div>
+          <div style={{ marginTop: 13, fontSize: 19, fontWeight: 800 }}>Registro de asistencia</div>
+          <div style={{ fontSize: 12.5, opacity: .85, marginTop: 4 }}>La hora se toma sola al registrarte.</div>
         </div>
 
-        <form style={S.cuerpo} onSubmit={enviar}>
+        <form style={S.cuerpo} onSubmit={enviar} noValidate>
+          {/* Cedula primero: al buscarla en el CNE se llenan solos varios campos */}
+          <label style={S.label}>Cédula *</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select
+              style={{ ...S.input, width: 76, flex: 'none', fontWeight: 700, textAlign: 'center' }}
+              value={nacionalidad}
+              onChange={(e) => setNacionalidad(e.target.value)}
+              aria-label="Nacionalidad"
+            >
+              <option value="V">V</option>
+              <option value="E">E</option>
+            </select>
+            <input
+              style={{ ...S.input, flex: 1, minWidth: 0 }}
+              value={f.cedula}
+              onChange={(e) => { setF((p) => ({ ...p, cedula: e.target.value })); setCneEstado(''); setCneDatos(null) }}
+              onBlur={consultarCNE}
+              inputMode="numeric"
+              placeholder="Solo números"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={consultarCNE}
+            disabled={cneEstado === 'buscando'}
+            style={{ width: '100%', marginTop: 8, minHeight: 44, fontSize: 14, fontWeight: 700, color: '#0a2351', background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: 10 }}
+          >
+            {cneEstado === 'buscando' ? 'Consultando CNE…' : '🔍 Buscar mis datos en el CNE'}
+          </button>
+
+          {cneEstado === 'ok' && (
+            <div style={{ marginTop: 10, padding: '12px 14px', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, fontSize: 13, color: '#065f46', lineHeight: 1.6 }}>
+              <b>✓ Encontrado en el CNE.</b> Revisa que los datos estén bien y corrige lo que haga falta.
+              {(cne.centro_electoral || cne.parroquia) && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #a7f3d0', fontSize: 12.5, color: '#047857' }}>
+                  <b>Dónde vota:</b> {[cne.parroquia, cne.municipio].filter(Boolean).join(', ')}
+                  {cne.centro_electoral && <><br />{cne.centro_electoral}</>}
+                </div>
+              )}
+            </div>
+          )}
+          {cneEstado === 'nada' && (
+            <div style={{ marginTop: 10, padding: '11px 14px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 10, fontSize: 13, color: '#78350f', lineHeight: 1.5 }}>
+              No apareció en el CNE. No hay problema: llena tus datos a mano y sigue.
+            </div>
+          )}
+          {cneEstado === 'error' && (
+            <div style={{ marginTop: 10, padding: '11px 14px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 10, fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
+              No se pudo consultar el CNE ahora. Llena tus datos a mano y sigue igual.
+            </div>
+          )}
+
           <label style={S.label}>Nombre *</label>
-          <input style={S.input} value={f.nombre} onChange={set('nombre')} autoComplete="given-name" />
+          <input style={S.input} value={f.nombre} onChange={set('nombre')} autoComplete="given-name" autoCapitalize="words" />
 
           <label style={S.label}>Apellido *</label>
-          <input style={S.input} value={f.apellido} onChange={set('apellido')} autoComplete="family-name" />
-
-          <label style={S.label}>Cédula *</label>
-          <input style={S.input} value={f.cedula} onChange={set('cedula')} inputMode="numeric" placeholder="Solo números" />
+          <input style={S.input} value={f.apellido} onChange={set('apellido')} autoComplete="family-name" autoCapitalize="words" />
 
           <label style={S.label}>Teléfono</label>
-          <input style={S.input} value={f.telefono} onChange={set('telefono')} inputMode="tel" placeholder="0412-1234567" />
+          <input style={S.input} value={f.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="tel" placeholder="0412-1234567" />
 
           <label style={S.label}>Municipio</label>
           <select style={S.input} value={f.municipio} onChange={set('municipio')}>
@@ -156,24 +256,30 @@ export default function RegistroQR() {
           </select>
 
           <label style={S.label}>Comuna</label>
-          <input style={S.input} value={f.comuna} onChange={set('comuna')} placeholder="Nombre de la comuna" />
+          <input style={S.input} value={f.comuna} onChange={set('comuna')} autoCapitalize="words" placeholder="Nombre de la comuna" />
 
           <label style={S.label}>Comunidad</label>
-          <input style={S.input} value={f.comunidad} onChange={set('comunidad')} placeholder="Sector / comunidad donde vive" />
+          <input style={S.input} value={f.comunidad} onChange={set('comunidad')} autoCapitalize="words" placeholder="Sector o comunidad donde vive" />
 
           <label style={S.label}>UBCH</label>
-          <input style={S.input} value={f.ubch} onChange={set('ubch')} placeholder="Unidad de Batalla Bolívar-Chávez" />
+          <input style={S.input} value={f.ubch} onChange={set('ubch')} autoCapitalize="words" placeholder="Unidad de Batalla Bolívar-Chávez" />
 
           <label style={S.label}>Cargo</label>
-          <input style={S.input} value={f.cargo} onChange={set('cargo')} placeholder="Cargo que desempeña" />
+          <input style={S.input} value={f.cargo} onChange={set('cargo')} autoCapitalize="words" placeholder="Cargo que desempeña" />
 
           {error && <div style={S.error}>{error}</div>}
 
-          <button type="submit" style={{ ...S.boton, opacity: enviando ? .7 : 1, cursor: enviando ? 'not-allowed' : 'pointer' }} disabled={enviando}>
+          <button
+            type="submit"
+            style={{ ...S.boton, opacity: enviando ? .7 : 1 }}
+            disabled={enviando}
+          >
             {enviando ? 'Registrando…' : 'Registrar mi asistencia'}
           </button>
 
-          <p style={S.pie}>Los campos con * son obligatorios.</p>
+          <p style={{ textAlign: 'center', fontSize: 12, color: '#64748b', marginTop: 16 }}>
+            Los campos con * son obligatorios.
+          </p>
         </form>
       </div>
     </div>
