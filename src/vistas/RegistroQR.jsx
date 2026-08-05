@@ -11,7 +11,7 @@
 // Pensada para telefono: una sola columna, campos de 16px (menos de eso iOS
 // hace zoom solo al enfocar) y botones altos para el dedo.
 // ============================================================================
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { MUNICIPIO_PROPIO, COMUNAS, UBCHS, comunidadesDe, datosDeComunidad } from '../lib/territorio'
 
@@ -52,12 +52,18 @@ const ahoraLocal = () => {
 
 const VACIO = { nombre: '', apellido: '', cedula: '', sexo: '', telefono: '', municipio: '', comuna: '', comunidad: '', ubch: '', cargo: '' }
 
+// Cuanto se muestra el aviso de "registrado" antes de volver solo al
+// formulario. Suficiente para leer la hora, corto para no frenar la cola.
+const SEGUNDOS_AVISO = 4
+
 export default function RegistroQR() {
   const [f, setF] = useState(VACIO)
   const [nacionalidad, setNacionalidad] = useState('V')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
   const [listo, setListo] = useState(null)
+  // Segundos que quedan antes de volver solo al formulario en blanco.
+  const [cuenta, setCuenta] = useState(0)
 
   const [cneEstado, setCneEstado] = useState('') // '', 'buscando', 'ok', 'nada', 'error'
   const [cneDatos, setCneDatos] = useState(null)
@@ -65,6 +71,28 @@ export default function RegistroQR() {
   const [muniOtro, setMuniOtro] = useState(false)
 
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }))
+
+  // Deja todo como recien abierto para registrar a la siguiente persona.
+  const nuevoRegistro = () => {
+    setF(VACIO)
+    setNacionalidad('V')
+    setMuniOtro(false)
+    setCneEstado('')
+    setCneDatos(null)
+    setError('')
+    setCuenta(0)
+    setListo(null)
+    window.scrollTo(0, 0)
+  }
+
+  // Cuenta regresiva del aviso: al llegar a cero vuelve solo al formulario.
+  useEffect(() => {
+    if (!listo) return
+    if (cuenta <= 0) { nuevoRegistro(); return }
+    const t = setTimeout(() => setCuenta((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listo, cuenta])
 
   // Solo hay data territorial de Cristobal Rojas. Para otros municipios los
   // campos siguen siendo texto libre, si no la gente de afuera no podria llenarlos.
@@ -174,6 +202,7 @@ export default function RegistroQR() {
     }
 
     setListo({ hora, nombre: `${nombre} ${apellido}` })
+    setCuenta(SEGUNDOS_AVISO)
   }
 
   // ------------------------------------------------------------- estilos
@@ -207,9 +236,31 @@ export default function RegistroQR() {
               <div style={{ fontSize: 12.5, color: '#047857', fontWeight: 700, letterSpacing: .5 }}>HORA DE ENTRADA</div>
               <div style={{ fontSize: 42, fontWeight: 800, color: '#065f46', lineHeight: 1.1, marginTop: 4 }}>{listo.hora}</div>
             </div>
-            <p style={{ color: '#64748b', fontSize: 13.5, marginTop: 22, lineHeight: 1.6 }}>
-              Ya puedes cerrar esta página. La <b>hora de salida</b> se firma al final de la jornada en la planilla impresa.
+            <p style={{ color: '#64748b', fontSize: 13.5, marginTop: 20, lineHeight: 1.6 }}>
+              La <b>hora de salida</b> se firma al final de la jornada en la planilla impresa.
             </p>
+
+            {/* Vuelve solo al formulario para no frenar la cola: el que atiende
+                no tiene que tocar nada entre una persona y la siguiente. */}
+            <button
+              type="button"
+              onClick={nuevoRegistro}
+              style={{ ...S.boton, marginTop: 22 }}
+            >
+              Registrar a la siguiente persona
+            </button>
+            <div style={{ marginTop: 12, fontSize: 13, color: '#64748b' }}>
+              El formulario se limpia solo en <b style={{ color: '#0a2351' }}>{cuenta}</b> {cuenta === 1 ? 'segundo' : 'segundos'}…
+            </div>
+            <div style={{ marginTop: 10, height: 4, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${(cuenta / SEGUNDOS_AVISO) * 100}%`,
+                background: '#22c55e',
+                borderRadius: 99,
+                transition: 'width 1s linear'
+              }} />
+            </div>
           </div>
         </div>
       </div>
