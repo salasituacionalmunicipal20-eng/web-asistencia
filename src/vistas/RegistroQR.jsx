@@ -13,6 +13,7 @@
 // ============================================================================
 import { useState } from 'react'
 import { supabase } from '../supabase'
+import { MUNICIPIO_PROPIO, COMUNAS, UBCHS, comunidadesDe, datosDeComunidad } from '../lib/territorio'
 
 const CNE_ENDPOINT = 'https://tfbzghjjfcaqmkzsxrrs.supabase.co/functions/v1/consultar-cedula'
 
@@ -54,6 +55,25 @@ export default function RegistroQR() {
   const [cneDatos, setCneDatos] = useState(null)
 
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }))
+
+  // Solo hay data territorial de Cristobal Rojas. Para otros municipios los
+  // campos siguen siendo texto libre, si no la gente de afuera no podria llenarlos.
+  const esPropio = f.municipio === MUNICIPIO_PROPIO
+
+  // Al cambiar de municipio se limpian comuna/comunidad/UBCH: los de un
+  // municipio no aplican al otro y quedarian datos cruzados.
+  const cambiarMunicipio = (e) =>
+    setF((p) => ({ ...p, municipio: e.target.value, comuna: '', comunidad: '', ubch: '' }))
+
+  const cambiarComuna = (e) =>
+    setF((p) => ({ ...p, comuna: e.target.value, comunidad: '', ubch: '' }))
+
+  // Cada comunidad tiene una sola UBCH, asi que al elegirla se llena sola.
+  const cambiarComunidad = (e) => {
+    const c = e.target.value
+    const d = datosDeComunidad(c)
+    setF((p) => ({ ...p, comunidad: c, ubch: d ? d.ubch : p.ubch }))
+  }
 
   // ------------------------------------------------------------- CNE
   const consultarCNE = async () => {
@@ -258,19 +278,53 @@ export default function RegistroQR() {
           <input style={S.input} value={f.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="tel" placeholder="0412-1234567" />
 
           <label style={S.label}>Municipio</label>
-          <select style={S.input} value={f.municipio} onChange={set('municipio')}>
+          <select style={S.input} value={f.municipio} onChange={cambiarMunicipio}>
             <option value="">Selecciona…</option>
             {MUNICIPIOS_MIRANDA.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
 
-          <label style={S.label}>Comuna</label>
-          <input style={S.input} value={f.comuna} onChange={set('comuna')} autoCapitalize="words" placeholder="Nombre de la comuna" />
+          {esPropio ? (
+            <>
+              <label style={S.label}>Comuna</label>
+              <select style={S.input} value={f.comuna} onChange={cambiarComuna}>
+                <option value="">Selecciona…</option>
+                {COMUNAS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
 
-          <label style={S.label}>Comunidad</label>
-          <input style={S.input} value={f.comunidad} onChange={set('comunidad')} autoCapitalize="words" placeholder="Sector o comunidad donde vive" />
+              <label style={S.label}>Comunidad</label>
+              <select
+                style={{ ...S.input, opacity: f.comuna ? 1 : .55 }}
+                value={f.comunidad}
+                onChange={cambiarComunidad}
+                disabled={!f.comuna}
+              >
+                <option value="">{f.comuna ? 'Selecciona…' : 'Elige primero la comuna'}</option>
+                {comunidadesDe(f.comuna).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
 
-          <label style={S.label}>UBCH</label>
-          <input style={S.input} value={f.ubch} onChange={set('ubch')} autoCapitalize="words" placeholder="Unidad de Batalla Bolívar-Chávez" />
+              <label style={S.label}>UBCH</label>
+              <select style={S.input} value={f.ubch} onChange={set('ubch')}>
+                <option value="">Selecciona…</option>
+                {UBCHS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+              {f.comunidad && f.ubch && (
+                <div style={{ marginTop: 6, fontSize: 12.5, color: '#047857' }}>
+                  Se llenó sola según tu comunidad. Si votas en otra, cámbiala.
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <label style={S.label}>Comuna</label>
+              <input style={S.input} value={f.comuna} onChange={set('comuna')} autoCapitalize="words" placeholder="Nombre de la comuna" />
+
+              <label style={S.label}>Comunidad</label>
+              <input style={S.input} value={f.comunidad} onChange={set('comunidad')} autoCapitalize="words" placeholder="Sector o comunidad donde vive" />
+
+              <label style={S.label}>UBCH</label>
+              <input style={S.input} value={f.ubch} onChange={set('ubch')} autoCapitalize="words" placeholder="Unidad de Batalla Bolívar-Chávez" />
+            </>
+          )}
 
           <label style={S.label}>Cargo</label>
           <input style={S.input} value={f.cargo} onChange={set('cargo')} autoCapitalize="words" placeholder="Cargo que desempeña" />

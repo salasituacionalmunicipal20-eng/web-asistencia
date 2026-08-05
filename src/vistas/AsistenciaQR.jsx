@@ -34,6 +34,22 @@ const fechaLarga = (iso) => {
 // recargar (el sitio es estatico, no hay servidor que resuelva rutas).
 const enlacePublico = () => `${window.location.origin}${window.location.pathname}#/registro`
 
+// Recuadro de conteo. Numero grande y tabular para que no "baile" al cambiar
+// en vivo, que es justo lo que se va a estar mirando durante la jornada.
+function Tarjeta({ etiqueta, valor, color, fondo, pie }) {
+  return (
+    <div style={{ background: fondo, borderRadius: 12, padding: '16px 18px', border: `1px solid ${color}22` }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: .5, textTransform: 'uppercase', color, opacity: .8 }}>
+        {etiqueta}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+        <span style={{ fontSize: 34, fontWeight: 800, color, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>{valor}</span>
+        {pie && <span style={{ fontSize: 13, fontWeight: 700, color, opacity: .7 }}>{pie}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function AsistenciaQR() {
   const [fecha, setFecha] = useState(hoyLocal())
   const [filas, setFilas] = useState([])
@@ -41,6 +57,7 @@ export default function AsistenciaQR() {
   const [qr, setQr] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [busqueda, setBusqueda] = useState('')
+  const [enVivo, setEnVivo] = useState(false)
 
   const url = enlacePublico()
 
@@ -62,6 +79,30 @@ export default function AsistenciaQR() {
   }, [fecha])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Tiempo real: cada vez que alguien escanea el QR y se registra, Supabase
+  // avisa por websocket y se recarga la lista. Se recarga entera (en vez de
+  // insertar la fila suelta) porque la lista de un dia es corta y asi nunca
+  // queda desincronizada si llegan varios registros juntos.
+  useEffect(() => {
+    const canal = supabase
+      .channel('asistencia_qr_vivo')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencia_qr' }, () => cargar())
+      .subscribe((estado) => setEnVivo(estado === 'SUBSCRIBED'))
+    return () => { supabase.removeChannel(canal) }
+  }, [cargar])
+
+  // Conteos del dia completo (no del buscador): es lo que se quiere saber de
+  // un vistazo mientras la jornada esta corriendo.
+  const conteo = useMemo(() => {
+    const n = { total: filas.length, mujeres: 0, hombres: 0, sinIndicar: 0 }
+    for (const r of filas) {
+      if (r.sexo === 'Femenino') n.mujeres++
+      else if (r.sexo === 'Masculino') n.hombres++
+      else n.sinIndicar++
+    }
+    return n
+  }, [filas])
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -236,6 +277,29 @@ export default function AsistenciaQR() {
               {copiado ? <Check size={15} /> : <Copy size={15} />} {copiado ? 'Copiado' : 'Copiar enlace'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ---------------- conteos en vivo ---------------- */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: .6, color: '#64748b', textTransform: 'uppercase' }}>
+            Jornada del {fechaLarga(fecha)}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: enVivo ? '#15803d' : '#94a3b8' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: enVivo ? '#22c55e' : '#cbd5e1', display: 'inline-block' }} />
+            {enVivo ? 'EN VIVO' : 'sin conexión en vivo'}
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+          <Tarjeta etiqueta="Personas ingresadas" valor={conteo.total} color="#0a2351" fondo="#e2e8f0" />
+          <Tarjeta etiqueta="Mujeres" valor={conteo.mujeres} color="#9d174d" fondo="#fce7f3"
+            pie={conteo.total ? `${Math.round(conteo.mujeres * 100 / conteo.total)}%` : ''} />
+          <Tarjeta etiqueta="Hombres" valor={conteo.hombres} color="#1e40af" fondo="#dbeafe"
+            pie={conteo.total ? `${Math.round(conteo.hombres * 100 / conteo.total)}%` : ''} />
+          {conteo.sinIndicar > 0 && (
+            <Tarjeta etiqueta="Sin indicar sexo" valor={conteo.sinIndicar} color="#78350f" fondo="#fef3c7" />
+          )}
         </div>
       </div>
 

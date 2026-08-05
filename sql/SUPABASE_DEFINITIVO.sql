@@ -1271,4 +1271,15 @@ CREATE POLICY aqr_all ON asistencia_qr FOR ALL USING (true) WITH CHECK (true);
 
 GRANT ALL ON asistencia_qr TO anon, authenticated;
 
+-- Tiempo real: el panel se suscribe por websocket para que los contadores de
+-- personas / mujeres / hombres suban solos mientras la jornada esta corriendo.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_publication_tables
+                   WHERE pubname = 'supabase_realtime' AND tablename = 'asistencia_qr')
+    THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE asistencia_qr;
+    END IF;
+END $$;
+
 NOTIFY pgrst, 'reload schema';
