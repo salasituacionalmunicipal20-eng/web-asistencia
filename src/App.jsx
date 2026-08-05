@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard, HardHat, CalendarClock, Timer, Wallet } from 'lucide-react'
+import { LayoutDashboard, Users, LogOut, ShieldCheck, Menu, X, FileText, ClipboardList, BookOpen, Settings, Sun, Moon, ScrollText, Plane, UserCog, KeyRound, Smartphone, Radio, IdCard, HardHat, CalendarClock, Timer, Wallet, QrCode } from 'lucide-react'
 import { useTema } from './theme/ThemeProvider'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useInactividad } from './hooks/useInactividad'
@@ -22,8 +22,21 @@ import Cuadrillas from './vistas/Cuadrillas'
 import Timesheets from './vistas/Timesheets'
 import TiempoTareas from './vistas/TiempoTareas'
 import Nomina from './vistas/Nomina'
+import AsistenciaQR from './vistas/AsistenciaQR'
+import RegistroQR from './vistas/RegistroQR'
+
+// La pagina a la que lleva el QR es PUBLICA: no pasa por login ni por el panel.
+// Se detecta por el hash (#/registro) porque el sitio es estatico en GitHub
+// Pages y una ruta con "/" real devolveria 404 al recargar.
+function esRutaPublica() {
+  return window.location.hash.replace(/^#/, '').replace(/\/+$/, '') === '/registro'
+}
 
 function App() {
+  // Antes que nada: si vienen del QR, se muestra el formulario publico y no se
+  // monta nada del panel (ni sesion, ni menu, ni consultas de admin).
+  const [rutaPublica] = useState(esRutaPublica)
+
   const { tema, toggle: toggleTema, t } = useTema()
   const [sesionActiva, setSesionActiva] = useState(null)
   const [rolUsuario, setRolUsuario] = useState(null)
@@ -112,7 +125,7 @@ function App() {
     const esSoloAlcaldesaLocal = (rolUsuario === 'alcaldesa' || rolUsuario === 'supervisor_cuadrilla') && !esSuperAdminLocal
     const idsVisibles = new Set(['dashboard', 'configuracion', 'cuadrillas'])
     if (!esSoloAlcaldesaLocal) {
-      ;['empleados', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'timesheets', 'tiempos', 'nomina', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
+      ;['empleados', 'asistencia_qr', 'carnets', 'justificaciones', 'memos', 'reportes', 'vacaciones', 'timesheets', 'tiempos', 'nomina', 'auditoria', 'administradores'].forEach(id => idsVisibles.add(id))
     }
     if (esSuperAdminLocal) { idsVisibles.add('radar'); idsVisibles.add('versiones') }
     if (vistaActual && !idsVisibles.has(vistaActual)) {
@@ -142,6 +155,10 @@ function App() {
     setPasswordInput('')
     setCargandoLogin(false)
   }
+
+  // Ruta publica del QR: se corta aca antes de cualquier pantalla del panel.
+  // Va despues de los hooks (no antes) para no romper el orden que exige React.
+  if (rutaPublica) return <RegistroQR />
 
   // Pantalla de carga mientras Supabase resuelve la sesión inicial
   if (cargandoSesion) {
@@ -249,6 +266,7 @@ function App() {
     { id: 'dashboard', icon: LayoutDashboard, label: 'Panel Principal' },
     ...(esSoloAlcaldesa ? [] : [
       { id: 'empleados', icon: Users, label: 'Gestión de Personal' },
+      { id: 'asistencia_qr', icon: QrCode, label: 'Asistencia por QR' },
       { id: 'carnets', icon: IdCard, label: 'Carnets' },
       { id: 'justificaciones', icon: ClipboardList, label: 'Justificaciones' },
       { id: 'memos', icon: FileText, label: 'Memorándums' },
@@ -367,6 +385,8 @@ function App() {
       <div style={{ flex: 1, padding: isMobile ? '15px' : '30px', boxSizing: 'border-box', overflowY: 'auto' }}>
         <div style={{ display: vistaActual === 'dashboard' ? 'block' : 'none' }}><PanelPrincipal /></div>
         <div style={{ display: vistaActual === 'empleados' ? 'block' : 'none' }}><Empleados /></div>
+        {/* Se monta solo cuando toca: genera el QR y consulta la fecha al abrirse. */}
+        {vistaActual === 'asistencia_qr' && <AsistenciaQR />}
         <div style={{ display: vistaActual === 'carnets' ? 'block' : 'none' }}><Carnets /></div>
         <div style={{ display: vistaActual === 'justificaciones' ? 'block' : 'none' }}><Justificaciones /></div>
         <div style={{ display: vistaActual === 'memos' ? 'block' : 'none' }}><Memos /></div>

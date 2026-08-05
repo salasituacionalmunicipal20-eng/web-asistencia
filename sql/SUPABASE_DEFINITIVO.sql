@@ -1209,3 +1209,45 @@ DROP POLICY IF EXISTS nc_all ON nomina_config;
 CREATE POLICY nc_all ON nomina_config FOR ALL USING (true) WITH CHECK (true);
 
 NOTIFY pgrst, 'reload schema';
+
+-- ============================================================================
+-- 17. ASISTENCIA POR QR (jornadas / actividades)
+-- ----------------------------------------------------------------------------
+-- Registro de asistencia INDEPENDIENTE del control diario de empleados
+-- (asistencia_registros). Aca se anota cualquier persona que escanee el QR
+-- publico, sea o no empleado del sistema: escribe sus datos a mano y el
+-- servidor guarda la hora en que se registro.
+--
+-- La hora de SALIDA se deja en blanco a proposito: la planilla PDF se imprime
+-- con ese espacio vacio para llenarlo a mano y firmar. La columna existe por si
+-- mas adelante quieren cargarla tambien desde el panel.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS asistencia_qr (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre       text NOT NULL,
+    apellido     text NOT NULL,
+    cedula       text NOT NULL,
+    telefono     text,
+    municipio    text,
+    vec          text,
+    cargo        text,
+    fecha        date NOT NULL DEFAULT ((now() AT TIME ZONE 'America/Caracas')::date),
+    hora_entrada text NOT NULL,          -- 'HH:MM' hora de Venezuela, la capta el dispositivo
+    hora_salida  text,                   -- normalmente NULL: se escribe a mano en la planilla
+    observacion  text,
+    creado_en    timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_aqr_fecha  ON asistencia_qr (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_aqr_cedula ON asistencia_qr (cedula);
+
+-- Evita que la misma persona quede dos veces en la misma jornada.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_aqr_cedula_fecha ON asistencia_qr (cedula, fecha);
+
+ALTER TABLE asistencia_qr ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS aqr_all ON asistencia_qr;
+CREATE POLICY aqr_all ON asistencia_qr FOR ALL USING (true) WITH CHECK (true);
+
+GRANT ALL ON asistencia_qr TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
