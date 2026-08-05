@@ -29,7 +29,7 @@ const ahoraLocal = () => {
   }
 }
 
-const VACIO = { nombre: '', apellido: '', cedula: '', telefono: '', municipio: '', vec: '', cargo: '' }
+const VACIO = { nombre: '', apellido: '', cedula: '', telefono: '', municipio: '', comuna: '', comunidad: '', ubch: '', cargo: '' }
 
 export default function RegistroQR() {
   const [f, setF] = useState(VACIO)
@@ -57,7 +57,9 @@ export default function RegistroQR() {
       nombre, apellido, cedula,
       telefono: f.telefono.trim() || null,
       municipio: f.municipio || null,
-      vec: f.vec.trim() || null,
+      comuna: f.comuna.trim() || null,
+      comunidad: f.comunidad.trim() || null,
+      ubch: f.ubch.trim() || null,
       cargo: f.cargo.trim() || null,
       fecha,
       hora_entrada: hora
@@ -153,8 +155,14 @@ export default function RegistroQR() {
             {MUNICIPIOS_MIRANDA.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
 
-          <label style={S.label}>VEC</label>
-          <input style={S.input} value={f.vec} onChange={set('vec')} />
+          <label style={S.label}>Comuna</label>
+          <input style={S.input} value={f.comuna} onChange={set('comuna')} placeholder="Nombre de la comuna" />
+
+          <label style={S.label}>Comunidad</label>
+          <input style={S.input} value={f.comunidad} onChange={set('comunidad')} placeholder="Sector / comunidad donde vive" />
+
+          <label style={S.label}>UBCH</label>
+          <input style={S.input} value={f.ubch} onChange={set('ubch')} placeholder="Unidad de Batalla Bolívar-Chávez" />
 
           <label style={S.label}>Cargo</label>
           <input style={S.input} value={f.cargo} onChange={set('cargo')} placeholder="Cargo que desempeña" />

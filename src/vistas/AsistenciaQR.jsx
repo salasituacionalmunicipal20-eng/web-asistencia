@@ -67,7 +67,7 @@ export default function AsistenciaQR() {
     const q = busqueda.trim().toLowerCase()
     if (!q) return filas
     return filas.filter((r) =>
-      [r.nombre, r.apellido, r.cedula, r.cargo, r.municipio, r.vec]
+      [r.nombre, r.apellido, r.cedula, r.cargo, r.municipio, r.comuna, r.comunidad, r.ubch]
         .filter(Boolean).join(' ').toLowerCase().includes(q)
     )
   }, [filas, busqueda])
@@ -109,14 +109,16 @@ export default function AsistenciaQR() {
 
     autoTable(doc, {
       startY: y + 4,
-      head: [['Nº', 'Nombre y apellido', 'Cédula', 'Teléfono', 'Municipio', 'VEC', 'Cargo', 'Entrada', 'Firma entrada', 'Salida', 'Firma salida']],
+      // Municipio, comuna y comunidad van juntos en una sola columna: separados
+      // no caben en la hoja sin dejar las firmas demasiado angostas para firmar.
+      head: [['Nº', 'Nombre y apellido', 'Cédula', 'Teléfono', 'UBCH', 'Municipio / Comuna / Comunidad', 'Cargo', 'Entrada', 'Firma entrada', 'Salida', 'Firma salida']],
       body: visibles.map((r, i) => ([
         String(i + 1),
         `${r.nombre || ''} ${r.apellido || ''}`.trim(),
         r.cedula || '',
         r.telefono || '',
-        r.municipio || '',
-        r.vec || '',
+        r.ubch || '',
+        [r.municipio, r.comuna, r.comunidad].filter(Boolean).join(' · '),
         r.cargo || '',
         r.hora_entrada || '',
         '',                       // firma de entrada: se firma a mano
@@ -128,23 +130,25 @@ export default function AsistenciaQR() {
       alternateRowStyles: { fillColor: [248, 250, 252] },
       // Filas altas: sin espacio real no se puede firmar encima.
       bodyStyles: { minCellHeight: 13 },
-      // Los anchos suman 248 mm y el area util de una carta horizontal con los
+      // Los anchos suman 246 mm y el area util de una carta horizontal con los
       // margenes de autoTable (~14,1 mm por lado) es ~251 mm. Si se tocan, hay
       // que volver a cuadrarlos o la tabla se sale de la hoja.
-      // El telefono necesita 26 mm: con menos, un numero tipo 0424-1234567 se
+      // El telefono necesita 23 mm: con menos, un numero tipo 0424-1234567 se
       // parte en dos lineas y la planilla se ve sucia.
+      // Nº y Entrada llevan 9 y 17 mm porque con menos el propio TITULO de la
+      // columna se parte en dos lineas ("N/º", "Entrad/a") y se ve descuidado.
       columnStyles: {
-        0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 19, halign: 'center' },
-        3: { cellWidth: 26, halign: 'center' },
-        4: { cellWidth: 23 },
-        5: { cellWidth: 12, halign: 'center' },
-        6: { cellWidth: 27 },
-        7: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-        8: { cellWidth: 32, fillColor: [255, 255, 255] },
-        9: { cellWidth: 14, fillColor: [255, 255, 255] },
-        10: { cellWidth: 32, fillColor: [255, 255, 255] }
+        0: { cellWidth: 9, halign: 'center' },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 18, halign: 'center' },
+        3: { cellWidth: 23, halign: 'center' },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 30 },
+        6: { cellWidth: 23 },
+        7: { cellWidth: 17, halign: 'center', fontStyle: 'bold' },
+        8: { cellWidth: 29, fillColor: [255, 255, 255] },
+        9: { cellWidth: 13, fillColor: [255, 255, 255] },
+        10: { cellWidth: 29, fillColor: [255, 255, 255] }
       },
       didDrawPage: () => dibujarFooterPDF(doc)
     })
@@ -174,13 +178,15 @@ export default function AsistenciaQR() {
       'Cédula': r.cedula || '',
       'Teléfono': r.telefono || '',
       'Municipio': r.municipio || '',
-      'VEC': r.vec || '',
+      'Comuna': r.comuna || '',
+      'Comunidad': r.comunidad || '',
+      'UBCH': r.ubch || '',
       'Cargo': r.cargo || '',
       'Hora de entrada': r.hora_entrada || '',
       'Hora de salida': r.hora_salida || ''
     }))
     const ws = XLSX.utils.json_to_sheet(datos)
-    ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 13 }, { wch: 15 }, { wch: 16 }, { wch: 10 }, { wch: 24 }, { wch: 15 }, { wch: 15 }]
+    ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 13 }, { wch: 15 }, { wch: 16 }, { wch: 20 }, { wch: 22 }, { wch: 26 }, { wch: 24 }, { wch: 15 }, { wch: 15 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Asistencia')
     XLSX.writeFile(wb, `asistencia-qr-${fecha}.xlsx`)
@@ -250,7 +256,7 @@ export default function AsistenciaQR() {
           {cargando ? 'Cargando…' : `${visibles.length} registro(s) · ${fechaLarga(fecha)}`}
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
             <thead>
               <tr>
                 <th style={th}>Nº</th>
@@ -258,7 +264,9 @@ export default function AsistenciaQR() {
                 <th style={th}>Cédula</th>
                 <th style={th}>Teléfono</th>
                 <th style={th}>Municipio</th>
-                <th style={th}>VEC</th>
+                <th style={th}>Comuna</th>
+                <th style={th}>Comunidad</th>
+                <th style={th}>UBCH</th>
                 <th style={th}>Cargo</th>
                 <th style={{ ...th, textAlign: 'center' }}>Entrada</th>
                 <th style={th}></th>
@@ -266,7 +274,7 @@ export default function AsistenciaQR() {
             </thead>
             <tbody>
               {!cargando && visibles.length === 0 && (
-                <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: '#94a3b8', padding: '34px 12px' }}>
+                <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#94a3b8', padding: '34px 12px' }}>
                   Nadie se ha registrado en esta fecha todavía.
                 </td></tr>
               )}
@@ -277,7 +285,9 @@ export default function AsistenciaQR() {
                   <td style={td}>{r.cedula}</td>
                   <td style={td}>{r.telefono || '—'}</td>
                   <td style={td}>{r.municipio || '—'}</td>
-                  <td style={td}>{r.vec || '—'}</td>
+                  <td style={td}>{r.comuna || '—'}</td>
+                  <td style={td}>{r.comunidad || '—'}</td>
+                  <td style={td}>{r.ubch || '—'}</td>
                   <td style={td}>{r.cargo || '—'}</td>
                   <td style={{ ...td, textAlign: 'center', fontWeight: 800, color: '#0a2351' }}>{r.hora_entrada}</td>
                   <td style={{ ...td, textAlign: 'right' }}>

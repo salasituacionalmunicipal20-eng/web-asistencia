@@ -1229,7 +1229,9 @@ CREATE TABLE IF NOT EXISTS asistencia_qr (
     cedula       text NOT NULL,
     telefono     text,
     municipio    text,
-    vec          text,
+    comuna       text,
+    comunidad    text,
+    ubch         text,
     cargo        text,
     fecha        date NOT NULL DEFAULT ((now() AT TIME ZONE 'America/Caracas')::date),
     hora_entrada text NOT NULL,          -- 'HH:MM' hora de Venezuela, la capta el dispositivo
@@ -1237,6 +1239,23 @@ CREATE TABLE IF NOT EXISTS asistencia_qr (
     observacion  text,
     creado_en    timestamptz DEFAULT now()
 );
+
+-- Compat: la primera version de esta tabla llamo "vec" a lo que en realidad es
+-- la UBCH. Si quedo creada con el nombre viejo, se renombra sin perder datos.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'asistencia_qr' AND column_name = 'vec')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'asistencia_qr' AND column_name = 'ubch')
+    THEN
+        ALTER TABLE asistencia_qr RENAME COLUMN vec TO ubch;
+    END IF;
+END $$;
+
+ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS ubch      text;
+ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS comuna    text;
+ALTER TABLE asistencia_qr ADD COLUMN IF NOT EXISTS comunidad text;
 
 CREATE INDEX IF NOT EXISTS idx_aqr_fecha  ON asistencia_qr (fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_aqr_cedula ON asistencia_qr (cedula);
