@@ -28,19 +28,6 @@ const MUNICIPIOS_MIRANDA = [
   'Sucre', 'Urdaneta', 'Zamora'
 ]
 
-// El CNE devuelve el municipio en mayusculas y sin acentos. Se busca el
-// equivalente de la lista para poder seleccionarlo en el desplegable.
-const sinAcentos = (s) => (s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim()
-const municipioDeLista = (delCne) => {
-  const buscado = sinAcentos(delCne)
-  if (!buscado) return ''
-  return MUNICIPIOS_MIRANDA.find((m) => sinAcentos(m) === buscado) || ''
-}
-
-// El CNE devuelve los nombres en mayusculas; se pasan a Tipo Titulo para que
-// combinen con el resto de la lista de municipios.
-const tituloCase = (s) => (s || '').toLowerCase().replace(/(^|\s|-)([a-záéíóúñ])/g, (_, p, c) => p + c.toUpperCase())
-
 const dosDig = (n) => String(n).padStart(2, '0')
 const ahoraLocal = () => {
   const d = new Date()
@@ -66,7 +53,6 @@ export default function RegistroQR() {
   const [cuenta, setCuenta] = useState(0)
 
   const [cneEstado, setCneEstado] = useState('') // '', 'buscando', 'ok', 'nada', 'error'
-  const [cneDatos, setCneDatos] = useState(null)
   // true cuando el municipio no esta en la lista y se escribe a mano
   const [muniOtro, setMuniOtro] = useState(false)
 
@@ -78,7 +64,6 @@ export default function RegistroQR() {
     setNacionalidad('V')
     setMuniOtro(false)
     setCneEstado('')
-    setCneDatos(null)
     setError('')
     setCuenta(0)
     setListo(null)
@@ -122,7 +107,7 @@ export default function RegistroQR() {
     const num = f.cedula.replace(/\D/g, '')
     if (num.length < 4 || num.length > 10) return
 
-    setCneEstado('buscando'); setCneDatos(null)
+    setCneEstado('buscando')
     try {
       const resp = await fetch(CNE_ENDPOINT, {
         method: 'POST',
@@ -136,22 +121,17 @@ export default function RegistroQR() {
 
       const nom = [d.primer_nombre, d.segundo_nombre].filter(Boolean).join(' ').trim()
       const ape = [d.primer_apellido, d.segundo_apellido].filter(Boolean).join(' ').trim()
-      const muniCne = ((d.cne && d.cne.municipio) || '').trim()
-      const muni = municipioDeLista(muniCne)
-      // Si vota fuera de Miranda, el municipio no esta en la lista: se pasa a
-      // "Otro" y se escribe el nombre que dio el CNE, para no perder el dato.
-      const fueraDeLista = !muni && !!muniCne
-      const municipioVacio = !f.municipio
 
+      // Del CNE solo se toman NOMBRE y APELLIDO. La ubicacion (municipio,
+      // parroquia, centro de votacion) NO se usa: es el registro electoral y
+      // suele estar desactualizado — la gente se muda y no actualiza donde vota.
+      // Municipio, comuna, comunidad y UBCH los llena la persona.
       setF((prev) => ({
         ...prev,
         // Solo se rellena lo que este vacio: si la persona ya escribio algo, manda ella.
         nombre: prev.nombre.trim() ? prev.nombre : nom,
-        apellido: prev.apellido.trim() ? prev.apellido : ape,
-        municipio: prev.municipio ? prev.municipio : (muni || (fueraDeLista ? tituloCase(muniCne) : ''))
+        apellido: prev.apellido.trim() ? prev.apellido : ape
       }))
-      if (fueraDeLista && municipioVacio) setMuniOtro(true)
-      setCneDatos(d)
       setCneEstado('ok')
     } catch {
       setCneEstado('error')
@@ -268,7 +248,6 @@ export default function RegistroQR() {
   }
 
   // ------------------------------------------------------------- formulario
-  const cne = cneDatos?.cne || {}
   return (
     <div style={S.pantalla}>
       <div style={S.caja}>
@@ -295,7 +274,7 @@ export default function RegistroQR() {
             <input
               style={{ ...S.input, flex: 1, minWidth: 0 }}
               value={f.cedula}
-              onChange={(e) => { setF((p) => ({ ...p, cedula: e.target.value })); setCneEstado(''); setCneDatos(null) }}
+              onChange={(e) => { setF((p) => ({ ...p, cedula: e.target.value })); setCneEstado('') }}
               onBlur={consultarCNE}
               inputMode="numeric"
               placeholder="Solo números"
@@ -312,13 +291,7 @@ export default function RegistroQR() {
 
           {cneEstado === 'ok' && (
             <div style={{ marginTop: 10, padding: '12px 14px', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, fontSize: 13, color: '#065f46', lineHeight: 1.6 }}>
-              <b>✓ Encontrado en el CNE.</b> Revisa que los datos estén bien y corrige lo que haga falta.
-              {(cne.centro_electoral || cne.parroquia) && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #a7f3d0', fontSize: 12.5, color: '#047857' }}>
-                  <b>Dónde vota:</b> {[cne.parroquia, cne.municipio].filter(Boolean).join(', ')}
-                  {cne.centro_electoral && <><br />{cne.centro_electoral}</>}
-                </div>
-              )}
+              <b>✓ Encontrado.</b> Se llenaron el nombre y el apellido. Revísalos y corrige si hace falta.
             </div>
           )}
           {cneEstado === 'nada' && (
