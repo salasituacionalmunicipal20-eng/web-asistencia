@@ -9,6 +9,29 @@
 -- 0. EXTENSIONES
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- 0.1 LLAVE DE "VER CLAVE" (18/09/2026)
+-- La llave con la que se cifra la copia de cada clave NO se escribe en
+-- ningún archivo: la inventa la propia base al azar y la guarda en el
+-- esquema "privado", que nadie de afuera puede leer. Las funciones la piden
+-- con privado.llave_claves(). Si ya existe, se deja la que hay (cambiarla
+-- dejaría ilegibles las copias guardadas).
+CREATE SCHEMA IF NOT EXISTS privado;
+REVOKE ALL ON SCHEMA privado FROM public, anon, authenticated;
+CREATE TABLE IF NOT EXISTS privado.llaves (
+    nombre    text PRIMARY KEY,
+    valor     text NOT NULL,
+    creada_en timestamptz NOT NULL DEFAULT now()
+);
+REVOKE ALL ON TABLE privado.llaves FROM public, anon, authenticated;
+INSERT INTO privado.llaves (nombre, valor)
+VALUES ('claves_empleados', encode(extensions.gen_random_bytes(32), 'hex'))
+ON CONFLICT (nombre) DO NOTHING;
+CREATE OR REPLACE FUNCTION privado.llave_claves()
+RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+    SELECT valor FROM privado.llaves WHERE nombre = 'claves_empleados';
+$$;
+REVOKE ALL ON FUNCTION privado.llave_claves() FROM public, anon, authenticated;
+
 
 -- ============================================================================
 -- 1. HABITANTES
@@ -107,8 +130,29 @@ ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_version_codigo int;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS app_ultimo_ping timestamp with time zone;
 ALTER TABLE empleados ADD COLUMN IF NOT EXISTS telefono text;
 
-UPDATE empleados SET clave_hash = extensions.crypt(clave, extensions.gen_salt('bf', 10))
-WHERE clave_hash IS NULL AND clave IS NOT NULL;
+-- Candado (18/09/2026): ninguna clave queda escrita en texto plano. Si algo
+-- escribe en empleados.clave (el '123456' por defecto de un empleado nuevo,
+-- por ejemplo), se convierte al instante en huella y la columna queda vacía.
+-- El empleado nuevo sigue entrando con '123456'.
+CREATE OR REPLACE FUNCTION public.fn_empleados_clave_segura()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
+BEGIN
+    IF NEW.clave IS NOT NULL AND NEW.clave <> '' THEN
+        NEW.clave_hash := crypt(NEW.clave, gen_salt('bf', 10));
+        /* La copia cifrada de "Ver clave" se vuelve a llenar sola la
+           próxima vez que la persona entre (lo hace verificar_clave). */
+        NEW.clave_actual_cifrada := NULL;
+        NEW.clave := NULL;
+    END IF;
+    RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS tr_empleados_clave_segura ON empleados;
+CREATE TRIGGER tr_empleados_clave_segura
+    BEFORE INSERT OR UPDATE OF clave ON empleados
+    FOR EACH ROW EXECUTE FUNCTION public.fn_empleados_clave_segura();
+
+UPDATE empleados SET clave = NULL WHERE clave IS NOT NULL AND clave_hash IS NOT NULL;
+UPDATE empleados SET clave = clave WHERE clave IS NOT NULL AND clave_hash IS NULL;
 
 ALTER TABLE empleados ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Permitir_Todo_Empleados" ON empleados;
@@ -255,6 +299,10 @@ CREATE TABLE IF NOT EXISTS vacaciones (
     motivo text, estado text NOT NULL DEFAULT 'Pendiente',
     fecha_solicitud timestamp with time zone DEFAULT now()
 );
+-- Lo que anota el administrador al decidir (lo muestra el panel). 18/09/2026
+ALTER TABLE vacaciones ADD COLUMN IF NOT EXISTS comentario_admin text;
+ALTER TABLE vacaciones ADD COLUMN IF NOT EXISTS fecha_decision timestamp with time zone;
+ALTER TABLE vacaciones ADD COLUMN IF NOT EXISTS decision_por text;
 ALTER TABLE vacaciones ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Permitir_Todo_Vacaciones" ON vacaciones;
 CREATE POLICY "Permitir_Todo_Vacaciones" ON vacaciones FOR ALL USING (true) WITH CHECK (true);
@@ -491,7 +539,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 DECLARE v_ced text := upper(trim(p_cedula));
 BEGIN
     UPDATE public.empleados
-    SET clave_actual_cifrada = pgp_sym_encrypt(p_clave, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2')
+    SET clave_actual_cifrada = pgp_sym_encrypt(p_clave, privado.llave_claves())
     WHERE public.empleados.cedula = v_ced
       AND public.empleados.clave_actual_cifrada IS NULL
       AND ((public.empleados.clave_hash IS NOT NULL
@@ -524,7 +572,7 @@ BEGIN
     END IF;
     UPDATE empleados
     SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
-        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, privado.llave_claves()),
         clave = NULL,
         requiere_cambio_clave = false
     WHERE cedula = upper(trim(p_cedula));
@@ -535,22 +583,93 @@ $$;
 GRANT EXECUTE ON FUNCTION public.actualizar_clave(text, text) TO anon, authenticated;
 
 
+-- Quién es administrador de verdad (18/09/2026): el correo de la SESIÓN
+-- (auth.jwt), nunca uno que mande el navegador. Las funciones de abajo
+-- todavía reciben p_admin_email para no romper el panel, pero lo ignoran.
+CREATE OR REPLACE FUNCTION public.es_admin_web()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.administradores_web a
+        WHERE lower(a.correo) = lower(coalesce(auth.jwt() ->> 'email', ''))
+          AND coalesce(a.activo, true)
+    );
+$$;
+REVOKE ALL ON FUNCTION public.es_admin_web() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.es_admin_web() TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION public.aprobar_justificacion(
     p_id uuid, p_aprobar boolean, p_comentario text DEFAULT NULL, p_admin_email text DEFAULT NULL)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_act int;
 BEGIN
+    IF NOT public.es_admin_web() THEN
+        RAISE EXCEPTION 'Sin permisos';
+    END IF;
     UPDATE justificaciones SET estado = CASE WHEN p_aprobar THEN 'Aprobado' ELSE 'Rechazado' END
     WHERE id = p_id;
     GET DIAGNOSTICS v_act = ROW_COUNT;
     INSERT INTO auditoria (tabla, registro_id, accion, valor_nuevo, usuario_email)
     VALUES ('justificaciones', p_id::text,
             CASE WHEN p_aprobar THEN 'APROBAR' ELSE 'RECHAZAR' END,
-            p_comentario, p_admin_email);
+            p_comentario, auth.jwt() ->> 'email');
     RETURN v_act = 1;
 END;
 $$;
-GRANT EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) TO authenticated;
+
+
+-- aprobar_vacaciones y eliminar_con_auditoria: el panel las llamaba pero
+-- nunca habían llegado a la base (solo estaban en legacy/SUPABASE_MEGASPRINT),
+-- así que aprobar vacaciones y borrar memos, justificaciones o vacaciones
+-- fallaban. Se reponen ya con el candado de administrador. (18/09/2026)
+CREATE OR REPLACE FUNCTION public.aprobar_vacaciones(
+    p_id uuid, p_aprobar boolean, p_comentario text DEFAULT NULL, p_admin_email text DEFAULT NULL)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_act int;
+BEGIN
+    IF NOT public.es_admin_web() THEN
+        RAISE EXCEPTION 'Sin permisos';
+    END IF;
+    UPDATE vacaciones
+    SET estado = CASE WHEN p_aprobar THEN 'Aprobado' ELSE 'Rechazado' END,
+        comentario_admin = p_comentario,
+        fecha_decision = now(),
+        decision_por = auth.jwt() ->> 'email'
+    WHERE id = p_id;
+    GET DIAGNOSTICS v_act = ROW_COUNT;
+    INSERT INTO auditoria (tabla, registro_id, accion, valor_nuevo, usuario_email)
+    VALUES ('vacaciones', p_id::text,
+            CASE WHEN p_aprobar THEN 'APROBAR' ELSE 'RECHAZAR' END,
+            p_comentario, auth.jwt() ->> 'email');
+    RETURN v_act = 1;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.aprobar_vacaciones(uuid, boolean, text, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.aprobar_vacaciones(uuid, boolean, text, text) TO authenticated;
+
+
+CREATE OR REPLACE FUNCTION public.eliminar_con_auditoria(
+    p_tabla text, p_id uuid, p_admin_email text DEFAULT NULL)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_borradas int := 0;
+BEGIN
+    IF NOT public.es_admin_web() THEN
+        RAISE EXCEPTION 'Sin permisos';
+    END IF;
+    IF p_tabla NOT IN ('memorandums', 'justificaciones', 'vacaciones') THEN
+        RAISE EXCEPTION 'Tabla no permitida: %', p_tabla;
+    END IF;
+    EXECUTE format('DELETE FROM public.%I WHERE id = $1', p_tabla) USING p_id;
+    GET DIAGNOSTICS v_borradas = ROW_COUNT;
+    INSERT INTO auditoria (tabla, registro_id, accion, usuario_email)
+    VALUES (p_tabla, p_id::text, 'ELIMINAR', auth.jwt() ->> 'email');
+    RETURN v_borradas > 0;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.eliminar_con_auditoria(text, uuid, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.eliminar_con_auditoria(text, uuid, text) TO authenticated;
 
 
 CREATE OR REPLACE FUNCTION public.resetear_clave_empleado(
@@ -558,22 +677,26 @@ CREATE OR REPLACE FUNCTION public.resetear_clave_empleado(
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 DECLARE v_act int;
 BEGIN
+    IF NOT public.es_admin_web() THEN
+        RAISE EXCEPTION 'Sin permisos';
+    END IF;
     IF p_clave_nueva IS NULL OR length(p_clave_nueva) < 4 THEN
         RAISE EXCEPTION 'La clave debe tener al menos 4 caracteres';
     END IF;
     UPDATE empleados
     SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
-        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, privado.llave_claves()),
         clave = NULL,
         requiere_cambio_clave = true
     WHERE cedula = upper(trim(p_cedula));
     GET DIAGNOSTICS v_act = ROW_COUNT;
     INSERT INTO auditoria (tabla, registro_id, accion, usuario_email)
-    VALUES ('empleados', p_cedula, 'RESET_CLAVE', p_admin_email);
+    VALUES ('empleados', p_cedula, 'RESET_CLAVE', auth.jwt() ->> 'email');
     RETURN v_act = 1;
 END;
 $$;
-GRANT EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) TO authenticated;
 
 
 CREATE OR REPLACE FUNCTION public.importar_empleado(
@@ -601,7 +724,7 @@ BEGIN
         VALUES (v_ced, p_nombres, p_apellidos, p_departamento, p_cargo,
                 p_hora_entrada, p_hora_salida, COALESCE(p_tolerancia_minutos, 15),
                 crypt(p_clave_inicial, gen_salt('bf', 10)),
-                pgp_sym_encrypt(p_clave_inicial, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+                pgp_sym_encrypt(p_clave_inicial, privado.llave_claves()),
                 true);
         RETURN 'CREADO';
     END IF;
@@ -638,7 +761,7 @@ BEGIN
         VALUES (v_ced, p_nombres, p_apellidos, p_departamento, p_cargo,
             p_telefono, p_fecha_nac, p_hora_entrada, p_hora_salida, 15,
             crypt(p_clave_inicial, gen_salt('bf', 10)),
-            pgp_sym_encrypt(p_clave_inicial, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+            pgp_sym_encrypt(p_clave_inicial, privado.llave_claves()),
             true);
         RETURN 'CREADO';
     END IF;
@@ -740,17 +863,20 @@ CREATE OR REPLACE FUNCTION public.obtener_clave_empleado(
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
 DECLARE v_clave text;
 BEGIN
-    IF p_admin_email IS NULL OR lower(p_admin_email) <> 'carlos.linares.es@gmail.com' THEN
+    /* Solo Carlos, comprobado con su SESIÓN (no con el correo que manda
+       el navegador, que cualquiera puede escribir). */
+    IF lower(coalesce(auth.jwt() ->> 'email', '')) <> 'carlos.linares.es@gmail.com' THEN
         RAISE EXCEPTION 'Sin permisos';
     END IF;
-    SELECT pgp_sym_decrypt(clave_actual_cifrada, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2')::text
+    SELECT pgp_sym_decrypt(clave_actual_cifrada, privado.llave_claves())::text
     INTO v_clave FROM empleados WHERE cedula = upper(trim(p_cedula));
     INSERT INTO auditoria (tabla, registro_id, accion, usuario_email)
-    VALUES ('empleados', upper(trim(p_cedula)), 'VER_CLAVE', p_admin_email);
+    VALUES ('empleados', upper(trim(p_cedula)), 'VER_CLAVE', auth.jwt() ->> 'email');
     RETURN v_clave;
 END;
 $$;
-GRANT EXECUTE ON FUNCTION public.obtener_clave_empleado(text, text) TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.obtener_clave_empleado(text, text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.obtener_clave_empleado(text, text) TO authenticated;
 
 
 -- ============================================================================
@@ -828,6 +954,15 @@ GRANT EXECUTE ON FUNCTION public.generar_memos_sin_salida(date) TO anon, authent
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO postgres, anon, authenticated, service_role;
+-- ...menos las de administrador, que solo se llaman con la sesión iniciada
+-- (18/09/2026). TIENE que ir DESPUÉS de la línea de arriba: si va antes,
+-- esa línea se las vuelve a dar a cualquiera sin iniciar sesión.
+REVOKE EXECUTE ON FUNCTION public.obtener_clave_empleado(text, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.resetear_clave_empleado(text, text, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.aprobar_justificacion(uuid, boolean, text, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.es_admin_web() FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.aprobar_vacaciones(uuid, boolean, text, text) FROM public, anon;
+REVOKE EXECUTE ON FUNCTION public.eliminar_con_auditoria(text, uuid, text) FROM public, anon;
 NOTIFY pgrst, 'reload schema';
 
 
@@ -1113,6 +1248,18 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.rechazar_reporte_cuadrilla(uuid, text) FROM anon;
 GRANT  EXECUTE ON FUNCTION public.rechazar_reporte_cuadrilla(uuid, text) TO authenticated;
+
+-- 15.8b Versión VIEJA de validar (cédula del validador + observaciones), que
+-- quedó viva en la base: cualquiera sin sesión podía marcar reportes como
+-- validados, sin ninguna comprobación. Ni el panel ni las apps la usan
+-- (usan la de arriba). Se le quita el permiso en vez de borrarla, para
+-- poder devolverlo si apareciera alguien que la necesite. (18/09/2026)
+DO $$
+BEGIN
+    IF to_regprocedure('public.validar_reporte_cuadrilla(uuid,text,text)') IS NOT NULL THEN
+        REVOKE EXECUTE ON FUNCTION public.validar_reporte_cuadrilla(uuid, text, text) FROM public, anon, authenticated;
+    END IF;
+END $$;
 
 
 -- 15.9 Refresco del schema cache de PostgREST para que las RPCs aparezcan

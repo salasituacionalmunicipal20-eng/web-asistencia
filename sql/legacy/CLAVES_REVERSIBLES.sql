@@ -34,7 +34,7 @@ BEGIN
     END IF;
     UPDATE public.empleados
     SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
-        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, privado.llave_claves()),
         clave = NULL,
         requiere_cambio_clave = false
     WHERE cedula = upper(trim(p_cedula));
@@ -58,7 +58,7 @@ BEGIN
     END IF;
     UPDATE empleados
     SET clave_hash = crypt(p_clave_nueva, gen_salt('bf', 10)),
-        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+        clave_actual_cifrada = pgp_sym_encrypt(p_clave_nueva, privado.llave_claves()),
         clave = NULL,
         requiere_cambio_clave = true
     WHERE cedula = upper(trim(p_cedula));
@@ -99,7 +99,7 @@ BEGIN
         VALUES (v_ced, p_nombres, p_apellidos, p_departamento, p_cargo,
                 p_hora_entrada, p_hora_salida, COALESCE(p_tolerancia_minutos, 15),
                 crypt(p_clave_inicial, gen_salt('bf', 10)),
-                pgp_sym_encrypt(p_clave_inicial, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2'),
+                pgp_sym_encrypt(p_clave_inicial, privado.llave_claves()),
                 true);
         RETURN 'CREADO';
     END IF;
@@ -127,7 +127,7 @@ BEGIN
     -- Asi llenamos retroactivamente la cifrada para empleados que existian
     -- antes de habilitar este registro.
     UPDATE public.empleados
-    SET clave_actual_cifrada = pgp_sym_encrypt(p_clave, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2')
+    SET clave_actual_cifrada = pgp_sym_encrypt(p_clave, privado.llave_claves())
     WHERE cedula = v_ced
       AND clave_actual_cifrada IS NULL
       AND ((clave_hash IS NOT NULL AND clave_hash = crypt(p_clave, clave_hash))
@@ -171,7 +171,7 @@ BEGIN
         RAISE EXCEPTION 'Sin permisos';
     END IF;
 
-    SELECT pgp_sym_decrypt(clave_actual_cifrada, 'ALCALDIA_CR_2026_MASTER_KEY_X9K2')::text
+    SELECT pgp_sym_decrypt(clave_actual_cifrada, privado.llave_claves())::text
     INTO v_clave
     FROM empleados
     WHERE cedula = upper(trim(p_cedula));
